@@ -35,10 +35,24 @@ class QuizController extends Controller
         return response()->json($quiz->load('questions'));
     }
 
+    public function destroy(Quiz $quiz)
+    {
+        if (auth()->id() !== $quiz->user_id) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $quiz->delete();
+
+        return response()->json([
+            'message' => 'Quiz deleted successfully',
+        ]);
+    }
+
     public function generateFromUpload(Request $request)
     {
         $request->validate([
             'file' => 'required|file|mimes:pdf|max:10240',
+            'title' => 'nullable|string|max:255',
             'count' => 'required|integer|min:1|max:50',
             'types' => 'required|array',
         ]);
@@ -48,6 +62,7 @@ class QuizController extends Controller
                 $request->file('file'),
                 $request->user()->id,
                 [
+                    'title' => filled($request->input('title')) ? $request->input('title') : null,
                     'count' => (int) $request->input('count', 10),
                     'types' => $request->input('types', []),
                 ]
