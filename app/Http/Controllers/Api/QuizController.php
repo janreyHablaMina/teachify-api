@@ -41,17 +41,72 @@ class QuizController extends Controller
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
+        $user = auth()->user();
         $quiz->delete();
+        $user->quizzes_used = $user->quizzes()->count();
+        $user->save();
 
         return response()->json([
             'message' => 'Quiz deleted successfully',
         ]);
     }
 
+    public function duplicate(Quiz $quiz)
+    {
+        if (auth()->id() !== $quiz->user_id) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $user = auth()->user();
+        $limit = (int) ($user->quiz_generation_limit ?? 3);
+        $used = $user->quizzes()->count();
+        if ($used >= $limit) {
+            return response()->json([
+                'error' => "You have reached the Free Plan limit ({$limit} quiz generations). Upgrade to continue using Teachify AI.",
+            ], 403);
+        }
+
+        $quiz->load('questions');
+
+        $copy = Quiz::create([
+            'user_id' => $user->id,
+            'title' => $quiz->title . ' (Copy)',
+            'topic' => $quiz->topic,
+            'type' => $quiz->type,
+        ]);
+
+        foreach ($quiz->questions as $question) {
+            $copy->questions()->create([
+                'type' => $question->type,
+                'question_text' => $question->question_text,
+                'options' => $question->options,
+                'correct_answer' => $question->correct_answer,
+                'explanation' => $question->explanation,
+            ]);
+        }
+
+        $user->quizzes_used = $user->quizzes()->count();
+        $user->save();
+
+        return response()->json([
+            'message' => 'Quiz duplicated successfully',
+            'quiz' => $copy->load('questions'),
+        ]);
+    }
+
     public function generateFromUpload(Request $request)
     {
+        $user = $request->user();
+        $limit = (int) ($user->quiz_generation_limit ?? 3);
+        $used = $user->quizzes()->count();
+        if ($used >= $limit) {
+            return response()->json([
+                'error' => "You have reached the Free Plan limit ({$limit} quiz generations). Upgrade to continue using Teachify AI.",
+            ], 403);
+        }
+
         $request->validate([
-            'file' => 'required|file|mimes:pdf|max:10240',
+            'file' => 'required|file|mimes:pdf|max:5120',
             'title' => 'nullable|string|max:255',
             'count' => 'required|integer|min:1|max:50',
             'types' => 'required|array',
@@ -60,13 +115,16 @@ class QuizController extends Controller
         try {
             $quiz = $this->quizService->generateFromPdf(
                 $request->file('file'),
-                $request->user()->id,
+                $user->id,
                 [
                     'title' => filled($request->input('title')) ? $request->input('title') : null,
                     'count' => (int) $request->input('count', 10),
                     'types' => $request->input('types', []),
                 ]
             );
+
+            $user->quizzes_used = $user->quizzes()->count();
+            $user->save();
 
             return response()->json([
                 'message' => 'Quiz generated successfully',

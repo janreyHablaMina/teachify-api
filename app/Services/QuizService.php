@@ -29,6 +29,11 @@ class QuizService
 
         try {
             $pdf = $this->pdfParser->parseFile($file->getPathname());
+            $pages = $pdf->getPages();
+            if (count($pages) > 20) {
+                throw new \Exception("PDF is too long. Maximum allowed is 20 pages.");
+            }
+
             $text = $pdf->getText();
 
             if (empty(trim($text))) {

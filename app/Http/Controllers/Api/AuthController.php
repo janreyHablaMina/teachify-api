@@ -11,12 +11,29 @@ use Illuminate\Validation\Rule;
 
 class AuthController extends Controller
 {
+    private array $blockedTempEmailDomains = [
+        'mailinator.com',
+        'tempmail.com',
+        '10minutemail.com',
+        'guerrillamail.com',
+        'yopmail.com',
+        'trashmail.com',
+        'dispostable.com',
+        'sharklasers.com',
+    ];
+
     private function resolvePlanTier(?string $plan): string
     {
         return match ($plan) {
             'basic', 'pro', 'school' => $plan,
             default => 'trial', // Maps legacy "free" to trial
         };
+    }
+
+    private function isTemporaryEmail(string $email): bool
+    {
+        $domain = strtolower((string) substr(strrchr($email, '@') ?: '', 1));
+        return in_array($domain, $this->blockedTempEmailDomains, true);
     }
 
     public function register(Request $request): JsonResponse
@@ -31,6 +48,12 @@ class AuthController extends Controller
             'password' => ['required', 'string', 'min:8', 'confirmed'],
             'role' => ['nullable', Rule::in(['admin', 'teacher', 'student'])],
         ]);
+
+        if ($this->isTemporaryEmail($validated['email'])) {
+            return response()->json([
+                'message' => 'Temporary email addresses are not allowed.',
+            ], 422);
+        }
 
         $user = User::create([
             'fullname' => $validated['fullname'],
