@@ -8,18 +8,19 @@ class AiService
 {
     protected $apiKey;
     protected $baseUrl;
+    protected $provider;
+    protected $model;
 
     public function __construct()
     {
         $this->apiKey = config('services.ai.key');
-        $this->baseUrl = config('services.ai.base_url', 'https://api.openai.com/v1');
+        $this->baseUrl = rtrim(config('services.ai.base_url', 'https://api.openai.com/v1'), '/');
+        $this->provider = strtolower(config('services.ai.provider', 'openai'));
+        $this->model = config('services.ai.model', 'gpt-4o-mini');
     }
 
     public function generateSummary(string $topic)
     {
-        // For the comparison feature, we simulate or call multiple models.
-        // Even if we have one API key, we can use different system prompts or models.
-
         $results = [
             'chatgpt' => $this->getMockOrReal('chatgpt', $topic),
             'gemini' => $this->getMockOrReal('gemini', $topic),
@@ -35,15 +36,13 @@ class AiService
         }
 
         try {
-            // If we have a key, we'll use OpenAI for both but with different identities for now
-            // Or if custom base URLs are set, we could theoretically route them.
             $identity = $provider === 'chatgpt'
-                ? 'You are ChatGPT (GPT-3.5), a helpful AI assistant.'
-                : 'You are Gemini, Google\'s most capable AI model.';
+                ? 'You are ChatGPT, a helpful AI assistant.'
+                : 'You are Gemini, Google\'s helpful AI assistant.';
 
             $response = Http::withToken($this->apiKey)
                 ->post("{$this->baseUrl}/chat/completions", [
-                    'model' => config('services.ai.model', 'gpt-3.5-turbo'),
+                    'model' => $this->model,
                     'messages' => [
                         ['role' => 'system', 'content' => $identity . ' Provide a comprehensive summary for teachers.'],
                         ['role' => 'user', 'content' => "Provide a detailed summary and major key points about: {$topic}"],
@@ -54,7 +53,6 @@ class AiService
                 return $response->json('choices.0.message.content');
             }
         } catch (\Exception $e) {
-            // Fallback to mock on error or just rethrow
         }
 
         return $this->getMockResponse($provider, $topic);
@@ -63,30 +61,19 @@ class AiService
     protected function getMockResponse(string $provider, string $topic)
     {
         if ($provider === 'chatgpt') {
-            return "ChatGPT Summary for '{$topic}':\n\nThis is a simulated ChatGPT response. It focuses on conversational, helpful educational content regarding current pedagogical standards.";
+            return "ChatGPT Summary for '{$topic}':\n\nThis is a simulated ChatGPT response.";
         }
 
-        return "Gemini Summary for '{$topic}':\n\nThis is a simulated Gemini response. It emphasizes logical structure, data-driven insights, and Google-style clarity for complex topics.";
+        return "Gemini Summary for '{$topic}':\n\nThis is a simulated Gemini response.";
     }
+
     public function generateRawResponse(string $prompt)
     {
         if (!$this->apiKey) {
-            // If no key, we return a clear "missing key" mock or error
-            return json_encode([
-                [
-                    'question_text' => '⚠️ AI API Key is missing in .env. Please configure AI_API_KEY to generate real questions from your file.',
-                    'type' => 'multiple_choice',
-                    'options' => ['Configure Key', 'Check .env', 'Tutorial', 'Mock Mode'],
-                    'correct_answer' => 'Configure Key',
-                    'explanation' => 'You are seeing this because the backend is in Mock Mode due to a missing API Key.'
-                ]
-            ]);
+            throw new \Exception('AI API key is missing. Set AI_API_KEY in the backend .env.');
         }
 
-        // Determine if we should use Gemini or OpenAI format
-        $isGemini = str_contains($this->baseUrl, 'googlevisualization') || str_contains($this->baseUrl, 'generativelanguage');
-
-        if ($isGemini) {
+        if ($this->provider === 'gemini' || str_contains($this->baseUrl, 'generativelanguage.googleapis.com')) {
             return $this->callGemini($prompt);
         }
 
@@ -97,72 +84,73 @@ class AiService
     {
         $response = Http::withToken($this->apiKey)
             ->post("{$this->baseUrl}/chat/completions", [
-                'model' => config('services.ai.model', 'gpt-3.5-turbo'),
+                'model' => $this->model,
                 'messages' => [
                     ['role' => 'system', 'content' => 'You are a helpful educational assistant. Return strictly valid JSON.'],
                     ['role' => 'user', 'content' => $prompt],
                 ],
-                'response_format' => ['type' => 'json_object']
             ]);
 
         if ($response->failed()) {
-            $errorData = $response->json();
-            $msg = $errorData['error']['message'] ?? $response->body();
-
             if ($response->status() === 429) {
-                // FALLBACK TO SMART DEMO MODE ON QUOTA ERROR
                 return $this->getMockQuizResponse($prompt);
             }
 
-            throw new \Exception("OpenAI API error: " . $msg);
+            $errorData = $response->json();
+            $msg = $errorData['error']['message'] ?? $response->body();
+            throw new \Exception("OpenAI API error: {$msg}");
         }
 
-        return $response->json('choices.0.message.content');
+        $content = $response->json('choices.0.message.content');
+        if (!$content) {
+            throw new \Exception('OpenAI returned an empty response.');
+        }
+
+        return $content;
     }
 
     protected function callGemini(string $prompt)
     {
-        $model = config('services.ai.model', 'gemini-2.0-flash-lite');
-        $url = "{$this->baseUrl}/models/{$model}:generateContent?key=" . $this->apiKey;
+        $model = $this->model ?: 'gemini-2.0-flash-lite';
+        $url = "{$this->baseUrl}/models/{$model}:generateContent?key={$this->apiKey}";
 
         $response = Http::post($url, [
             'contents' => [
-                ['parts' => [['text' => $prompt]]]
+                ['parts' => [['text' => $prompt]]],
             ],
             'generationConfig' => [
                 'responseMimeType' => 'application/json',
-            ]
+            ],
         ]);
 
+        if ($response->failed() && $response->status() === 400) {
+            $response = Http::post($url, [
+                'contents' => [
+                    ['parts' => [['text' => $prompt . "\n\nReturn ONLY valid JSON."]]],
+                ],
+            ]);
+        }
+
         if ($response->failed()) {
-            // If it's a quota error, fallback to demo mode
             if ($response->status() === 429) {
                 return $this->getMockQuizResponse($prompt);
             }
 
-            // If JSON mode fails (some older models/versions), try regular mode
-            if ($response->status() === 400) {
-                $response = Http::post($url, [
-                    'contents' => [
-                        ['parts' => [['text' => $prompt . "\n\nIMPORTANT: Return ONLY valid JSON."]]]
-                    ]
-                ]);
-            }
-
-            if ($response->failed()) {
-                $errorData = $response->json();
-                $msg = $errorData['error']['message'] ?? $response->body();
-                throw new \Exception("Gemini API error: " . $msg);
-            }
+            $errorData = $response->json();
+            $msg = $errorData['error']['message'] ?? $response->body();
+            throw new \Exception("Gemini API error: {$msg}");
         }
 
         $text = $response->json('candidates.0.content.parts.0.text');
+        if (!$text) {
+            throw new \Exception('Gemini returned an empty response.');
+        }
 
-        // Ensure we only return the JSON part
-        if (preg_match('/\[.*\]/s', $text, $matches)) {
+        if (preg_match('/\[[\s\S]*\]/', $text, $matches)) {
             return $matches[0];
         }
-        if (preg_match('/\{.*\}/s', $text, $matches)) {
+
+        if (preg_match('/\{[\s\S]*\}/', $text, $matches)) {
             return $matches[0];
         }
 
@@ -171,29 +159,79 @@ class AiService
 
     protected function getMockQuizResponse(string $prompt = '')
     {
-        // Try to extract some context from the prompt (the PDF text)
-        $context = "General Topic";
-        if (preg_match('/Content:\s*---\s*(.*?)\n/s', $prompt, $matches)) {
-            $context = trim($matches[1]);
-            // Take first 50 chars as a topic
-            $context = substr($context, 0, 50) . "...";
+        $questionCount = 5;
+        if (preg_match('/exactly\s+(\d+)\s+questions/i', $prompt, $matches)) {
+            $questionCount = max(1, min((int) $matches[1], 50));
         }
 
-        return json_encode([
-            [
-                'question_text' => "Demo: Based on your PDF content ('$context'), what is the primary theme?",
+        $content = '';
+        if (preg_match('/Content:\s*---\s*(.*?)\s*---/s', $prompt, $matches)) {
+            $content = trim((string) $matches[1]);
+        }
+        $content = preg_replace('/\s+/', ' ', $content ?? '');
+        $content = trim((string) $content);
+
+        // Build sentence pool from PDF text and keep meaningful lines only.
+        $sentences = preg_split('/(?<=[\.\!\?])\s+/u', $content) ?: [];
+        $sentences = array_values(array_filter(array_map('trim', $sentences), function ($s) {
+            $len = mb_strlen($s);
+            return $len >= 35 && $len <= 220;
+        }));
+
+        if (count($sentences) < 4) {
+            $seed = mb_substr($content ?: 'the uploaded lesson', 0, 120);
+            $items = [];
+            for ($i = 1; $i <= $questionCount; $i++) {
+                $items[] = [
+                    'question_text' => "Fallback Q{$i}: Which statement best matches the uploaded lesson context?",
+                    'type' => 'multiple_choice',
+                    'options' => [
+                        "The lesson focuses on: {$seed}",
+                        'The lesson is mainly about weather forecasting only.',
+                        'The lesson discusses unrelated celebrity news.',
+                        'The lesson is purely random symbols without meaning.',
+                    ],
+                    'correct_answer' => "The lesson focuses on: {$seed}",
+                    'explanation' => 'Demo mode: generated from extracted PDF context because API quota is unavailable.',
+                ];
+            }
+
+            return json_encode($items);
+        }
+
+        $items = [];
+        $max = min($questionCount, count($sentences));
+        for ($i = 0; $i < $max; $i++) {
+            $correct = $sentences[$i];
+            $questionText = "Based on the uploaded lesson, which statement is explicitly supported?";
+
+            $distractors = [];
+            for ($j = 1; $j <= count($sentences); $j++) {
+                $candidate = $sentences[($i + $j) % count($sentences)];
+                if ($candidate !== $correct) {
+                    $distractors[] = "Not stated directly: {$candidate}";
+                }
+                if (count($distractors) === 3) {
+                    break;
+                }
+            }
+
+            while (count($distractors) < 3) {
+                $distractors[] = 'Not stated directly in the uploaded lesson text.';
+            }
+
+            $options = array_merge([$correct], $distractors);
+            shuffle($options);
+
+            $items[] = [
+                'question_text' => $questionText,
                 'type' => 'multiple_choice',
-                'options' => ['Detailed Analysis', 'Introductory Overview', 'Technical Specification', 'Historical Background'],
-                'correct_answer' => 'Introductory Overview',
-                'explanation' => "The uploaded file mentions elements related to '$context'."
-            ],
-            [
-                'question_text' => "Demo: Which key term was extracted from your document?",
-                'type' => 'multiple_choice',
-                'options' => ['Education', 'Technology', 'Innovation', 'Research'],
-                'correct_answer' => 'Technology',
-                'explanation' => "The analyzer detected keywords related to the provided text."
-            ]
-        ]);
+                'options' => $options,
+                'correct_answer' => $correct,
+                'explanation' => 'Demo mode: generated from extracted PDF sentences because API quota is unavailable.',
+            ];
+        }
+
+        return json_encode($items);
     }
 }

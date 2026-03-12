@@ -38,21 +38,32 @@ class QuizService
             // Limit text to avoid token limits (approx first 3000 words)
             $limitedText = implode(' ', array_slice(explode(' ', $text), 0, 3000));
 
-            $questionCount = $options['count'] ?? 10;
-            $type = $options['types'][0] ?? 'multiple_choice';
+            $questionCount = max(1, min((int) ($options['count'] ?? 10), 50));
+            $allowedTypes = ['multiple_choice', 'true_false', 'short_answer', 'essay', 'enumeration'];
+            $types = array_values(array_filter(
+                (array) ($options['types'] ?? ['multiple_choice']),
+                fn ($type) => in_array($type, $allowedTypes, true)
+            ));
+            if (count($types) === 0) {
+                $types = ['multiple_choice'];
+            }
+            $typeList = implode(', ', $types);
 
-            $prompt = "You are an educational expert. Based on the lesson content provided below, generate a quiz with exactly {$questionCount} {$type} questions. 
+            $prompt = "You are an educational expert. Based on the lesson content provided below, generate a quiz with exactly {$questionCount} questions. 
+            Allowed question types: {$typeList}.
+            Distribute questions across allowed types naturally.
             
             Format your response as a JSON array of objects with the following schema:
             [
               {
-                \"question_text\": \"string (the question)\",
-                \"type\": \"{$type}\",
-                \"options\": [\"string\", \"string\", \"string\", \"string\"] (exactly 4 options if multiple_choice, else null),
+                \"question_text\": \"string\",
+                \"type\": \"one of: {$typeList}\",
+                \"options\": [\"string\", \"string\", \"string\", \"string\"] (exactly 4 options only if type is multiple_choice, otherwise null),
                 \"correct_answer\": \"string (the correct option or answer text)\",
                 \"explanation\": \"string (short educational explanation)\"
               }
             ]
+            Return ONLY valid JSON. No markdown fences.
 
             Content:
             ---
@@ -65,7 +76,8 @@ class QuizService
             $json = preg_replace('/^```json\s*/', '', $aiResult);
             $json = preg_replace('/\s*```$/', '', $json);
             
-            $questionsData = json_decode($json, true);
+            $decoded = json_decode($json, true);
+            $questionsData = $decoded['questions'] ?? $decoded;
 
             if (!is_array($questionsData)) {
                 Log::error("AI Quiz JSON Parsing Failed", ['raw' => $aiResult]);
@@ -79,15 +91,30 @@ class QuizService
                 'type' => 'file',
             ]);
 
+            $createdCount = 0;
             foreach ($questionsData as $q) {
+                if (!is_array($q) || empty($q['question_text']) || empty($q['correct_answer'])) {
+                    continue;
+                }
+
+                $questionType = $q['type'] ?? $types[0];
+                if (!in_array($questionType, $allowedTypes, true)) {
+                    $questionType = $types[0];
+                }
+
                 Question::create([
                     'quiz_id' => $quiz->id,
-                    'type' => $q['type'] ?? $type,
+                    'type' => $questionType,
                     'question_text' => $q['question_text'],
-                    'options' => $q['options'] ?? null,
+                    'options' => $questionType === 'multiple_choice' ? ($q['options'] ?? null) : null,
                     'correct_answer' => $q['correct_answer'],
                     'explanation' => $q['explanation'] ?? null,
                 ]);
+                $createdCount++;
+            }
+
+            if ($createdCount === 0) {
+                throw new \Exception("AI returned no valid questions for this PDF. Please try again with a text-based PDF.");
             }
 
             return $quiz->load('questions');

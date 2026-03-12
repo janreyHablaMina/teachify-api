@@ -35,7 +35,7 @@ class QuizController extends Controller
     public function generateFromUpload(Request $request)
     {
         $request->validate([
-            'file' => 'required|file|mimes:pdf,docx,pptx|max:10240', // 10MB limit
+            'file' => 'required|file|mimes:pdf|max:10240',
             'count' => 'required|integer|min:1|max:50',
             'types' => 'required|array',
         ]);
@@ -45,8 +45,8 @@ class QuizController extends Controller
                 $request->file('file'),
                 $request->user()->id,
                 [
-                    'count' => $request->count,
-                    'types' => $request->types,
+                    'count' => (int) $request->input('count', 10),
+                    'types' => $request->input('types', []),
                 ]
             );
 
