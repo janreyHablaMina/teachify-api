@@ -30,6 +30,21 @@ class AuthController extends Controller
         };
     }
 
+    private function applyPlanCapabilities(?User $user): ?User
+    {
+        if (!$user) {
+            return $user;
+        }
+
+        $planTier = $this->resolvePlanTier($user->plan);
+        if ($planTier === 'basic') {
+            $user->quiz_generation_limit = 50;
+            $user->max_questions_per_quiz = 50;
+        }
+
+        return $user;
+    }
+
     private function isTemporaryEmail(string $email): bool
     {
         $domain = strtolower((string) substr(strrchr($email, '@') ?: '', 1));
@@ -71,7 +86,7 @@ class AuthController extends Controller
 
         return response()->json([
             'message' => 'Registration successful.',
-            'user' => $request->user(),
+            'user' => $this->applyPlanCapabilities($request->user()),
             'plan_tier' => $this->resolvePlanTier($request->user()?->plan),
         ], 201);
     }
@@ -97,7 +112,7 @@ class AuthController extends Controller
 
         return response()->json([
             'message' => 'Login successful.',
-            'user' => $request->user(),
+            'user' => $this->applyPlanCapabilities($request->user()),
             'plan_tier' => $this->resolvePlanTier($request->user()?->plan),
         ]);
     }
@@ -119,7 +134,7 @@ class AuthController extends Controller
         $user = $request->user();
 
         return response()->json([
-            'user' => $user,
+            'user' => $this->applyPlanCapabilities($user),
             'plan_tier' => $this->resolvePlanTier($user?->plan),
         ]);
     }

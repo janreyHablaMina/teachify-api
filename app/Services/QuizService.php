@@ -21,23 +21,18 @@ class QuizService
     /**
      * Generate a quiz from a PDF file
      */
-    public function generateFromPdf($file, $userId, array $options)
+    public function generateFromUpload($file, $userId, array $options)
     {
-        if ($file->getClientOriginalExtension() !== 'pdf') {
-            throw new \Exception("Currently only PDF files are supported for AI question generation.");
+        $extension = strtolower((string) $file->getClientOriginalExtension());
+        if (!in_array($extension, ['pdf', 'docx', 'pptx'], true)) {
+            throw new \Exception("Unsupported file format. Allowed formats are PDF, DOCX, and PPTX.");
         }
 
         try {
-            $pdf = $this->pdfParser->parseFile($file->getPathname());
-            $pages = $pdf->getPages();
-            if (count($pages) > 20) {
-                throw new \Exception("PDF is too long. Maximum allowed is 20 pages.");
-            }
-
-            $text = $pdf->getText();
+            $text = $this->extractTextFromFile($file->getPathname(), $extension);
 
             if (empty(trim($text))) {
-                throw new \Exception("Could not extract any text from the PDF file. It might be scanned or empty.");
+                throw new \Exception("Could not extract text from the uploaded file. It might be empty or unsupported.");
             }
 
             // Limit text to avoid token limits (approx first 3000 words)
@@ -134,5 +129,75 @@ class QuizService
             Log::error("Quiz Generation Failed: " . $e->getMessage());
             throw $e;
         }
+    }
+
+    protected function extractTextFromFile(string $filePath, string $extension): string
+    {
+        if ($extension === 'pdf') {
+            $pdf = $this->pdfParser->parseFile($filePath);
+            $pages = $pdf->getPages();
+            if (count($pages) > 20) {
+                throw new \Exception("PDF is too long. Maximum allowed is 20 pages.");
+            }
+            return (string) $pdf->getText();
+        }
+
+        if ($extension === 'docx') {
+            return $this->extractDocxText($filePath);
+        }
+
+        if ($extension === 'pptx') {
+            return $this->extractPptxText($filePath);
+        }
+
+        return '';
+    }
+
+    protected function extractDocxText(string $filePath): string
+    {
+        $zip = new \ZipArchive();
+        if ($zip->open($filePath) !== true) {
+            return '';
+        }
+
+        $xml = $zip->getFromName('word/document.xml');
+        $zip->close();
+        if (!$xml) {
+            return '';
+        }
+
+        $xml = preg_replace('/<w:tab\/>/', ' ', $xml);
+        $xml = preg_replace('/<\/w:p>/', "\n", $xml);
+        $text = strip_tags($xml);
+        $text = html_entity_decode((string) $text, ENT_QUOTES | ENT_XML1, 'UTF-8');
+        return trim((string) preg_replace('/\s+/', ' ', $text));
+    }
+
+    protected function extractPptxText(string $filePath): string
+    {
+        $zip = new \ZipArchive();
+        if ($zip->open($filePath) !== true) {
+            return '';
+        }
+
+        $slidesText = [];
+        for ($i = 0; $i < $zip->numFiles; $i++) {
+            $name = $zip->getNameIndex($i);
+            if (!$name || !preg_match('/^ppt\/slides\/slide\d+\.xml$/', $name)) {
+                continue;
+            }
+            $xml = $zip->getFromIndex($i);
+            if (!$xml) {
+                continue;
+            }
+            preg_match_all('/<a:t[^>]*>(.*?)<\/a:t>/s', $xml, $matches);
+            if (!empty($matches[1])) {
+                $slideText = implode(' ', array_map(fn ($part) => html_entity_decode(strip_tags((string) $part), ENT_QUOTES | ENT_XML1, 'UTF-8'), $matches[1]));
+                $slidesText[] = trim((string) preg_replace('/\s+/', ' ', $slideText));
+            }
+        }
+
+        $zip->close();
+        return trim(implode("\n", array_filter($slidesText)));
     }
 }

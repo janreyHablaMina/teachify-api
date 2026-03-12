@@ -9,6 +9,10 @@ Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanc
 Route::get('/me', [AuthController::class, 'me'])->middleware('auth:sanctum');
 
 Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/admin/users', [\App\Http\Controllers\Api\AdminUserController::class, 'index']);
+    Route::put('/admin/users/{user}', [\App\Http\Controllers\Api\AdminUserController::class, 'update']);
+    Route::delete('/admin/users/{user}', [\App\Http\Controllers\Api\AdminUserController::class, 'destroy']);
+
     Route::get('/summaries', [\App\Http\Controllers\Api\SummaryController::class, 'index']);
     Route::post('/summaries/generate', [\App\Http\Controllers\Api\SummaryController::class, 'generate']);
     Route::get('/summaries/{summary}/export-pdf', [\App\Http\Controllers\Api\SummaryController::class, 'exportPdf']);
