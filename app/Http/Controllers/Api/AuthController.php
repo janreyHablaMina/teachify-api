@@ -11,6 +11,14 @@ use Illuminate\Validation\Rule;
 
 class AuthController extends Controller
 {
+    private function resolvePlanTier(?string $plan): string
+    {
+        return match ($plan) {
+            'basic', 'pro', 'school' => $plan,
+            default => 'trial', // Maps legacy "free" to trial
+        };
+    }
+
     public function register(Request $request): JsonResponse
     {
         $request->merge([
@@ -41,6 +49,7 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'Registration successful.',
             'user' => $request->user(),
+            'plan_tier' => $this->resolvePlanTier($request->user()?->plan),
         ], 201);
     }
 
@@ -66,6 +75,7 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'Login successful.',
             'user' => $request->user(),
+            'plan_tier' => $this->resolvePlanTier($request->user()?->plan),
         ]);
     }
 
@@ -83,8 +93,11 @@ class AuthController extends Controller
 
     public function me(Request $request): JsonResponse
     {
+        $user = $request->user();
+
         return response()->json([
-            'user' => $request->user(),
+            'user' => $user,
+            'plan_tier' => $this->resolvePlanTier($user?->plan),
         ]);
     }
 }
