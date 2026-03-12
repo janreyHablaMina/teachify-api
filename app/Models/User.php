@@ -54,4 +54,14 @@ class User extends Authenticatable
             'max_questions_per_quiz' => 'integer',
         ];
     }
+
+    public function summaries()
+    {
+        return $this->hasMany(Summary::class);
+    }
+
+    public function quizzes()
+    {
+        return $this->hasMany(Quiz::class);
+    }
 }
