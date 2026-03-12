@@ -15,5 +15,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/quizzes', [\App\Http\Controllers\Api\QuizController::class, 'index']);
     Route::get('/quizzes/{quiz}', [\App\Http\Controllers\Api\QuizController::class, 'show']);
+    Route::get('/quizzes/{quiz}/export-pdf', [\App\Http\Controllers\Api\QuizController::class, 'exportPdf']);
     Route::post('/quizzes/generate-from-upload', [\App\Http\Controllers\Api\QuizController::class, 'generateFromUpload']);
 });

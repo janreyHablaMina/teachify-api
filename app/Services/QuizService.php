@@ -102,12 +102,18 @@ class QuizService
                     $questionType = $types[0];
                 }
 
+                $questionText = (string) $q['question_text'];
+                $correctAnswer = (string) $q['correct_answer'];
+                if (mb_strlen($correctAnswer) > 250) {
+                    $correctAnswer = mb_substr($correctAnswer, 0, 250);
+                }
+
                 Question::create([
                     'quiz_id' => $quiz->id,
                     'type' => $questionType,
-                    'question_text' => $q['question_text'],
+                    'question_text' => $questionText,
                     'options' => $questionType === 'multiple_choice' ? ($q['options'] ?? null) : null,
-                    'correct_answer' => $q['correct_answer'],
+                    'correct_answer' => $correctAnswer,
                     'explanation' => $q['explanation'] ?? null,
                 ]);
                 $createdCount++;
