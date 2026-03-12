@@ -29,6 +29,10 @@ class UserFactory extends Factory
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
             'role' => 'teacher',
+            'plan' => 'free',
+            'quiz_generation_limit' => 3,
+            'quizzes_used' => 0,
+            'max_questions_per_quiz' => 10,
             'remember_token' => Str::random(10),
         ];
     }

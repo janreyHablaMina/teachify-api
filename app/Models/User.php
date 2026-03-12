@@ -23,6 +23,10 @@ class User extends Authenticatable
         'email',
         'password',
         'role',
+        'plan',
+        'quiz_generation_limit',
+        'quizzes_used',
+        'max_questions_per_quiz',
     ];
 
     /**
@@ -45,6 +49,9 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'quiz_generation_limit' => 'integer',
+            'quizzes_used' => 'integer',
+            'max_questions_per_quiz' => 'integer',
         ];
     }
 }

@@ -29,6 +29,10 @@ class AuthController extends Controller
             'email' => $validated['email'],
             'password' => $validated['password'],
             'role' => $validated['role'] ?? 'teacher',
+            'plan' => 'free',
+            'quiz_generation_limit' => 3,
+            'quizzes_used' => 0,
+            'max_questions_per_quiz' => 10,
         ]);
 
         Auth::login($user);
