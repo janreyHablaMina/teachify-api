@@ -49,15 +49,27 @@ class QuizService
             }
             $typeList = implode(', ', $types);
 
-            $prompt = "You are an educational expert. Based on the lesson content provided below, generate a quiz with exactly {$questionCount} questions. 
-            Allowed question types: {$typeList}.
-            Distribute questions across allowed types naturally.
+            $typeCounts = (array) ($options['type_counts'] ?? []);
+            
+            $promptPart = "";
+            if (!empty($typeCounts)) {
+                $promptPart = "Generate exactly:\n";
+                foreach ($typeCounts as $type => $count) {
+                    if ($count > 0 && in_array($type, $allowedTypes)) {
+                        $promptPart .= "- {$count} questions of type '{$type}'\n";
+                    }
+                }
+            } else {
+                $promptPart = "Generate exactly {$questionCount} questions. \nAllowed question types: {$typeList}.\nDistribute questions across allowed types naturally.";
+            }
+
+            $prompt = "You are an educational expert. Based on the lesson content provided below, {$promptPart}
             
             Format your response as a JSON array of objects with the following schema:
             [
               {
                 \"question_text\": \"string\",
-                \"type\": \"one of: {$typeList}\",
+                \"type\": \"one of: " . (!empty($typeCounts) ? implode(', ', array_keys(array_filter($typeCounts, fn($c) => $c > 0))) : $typeList) . "\",
                 \"options\": [\"string\", \"string\", \"string\", \"string\"] (exactly 4 options only if type is multiple_choice, otherwise null),
                 \"correct_answer\": \"string (the correct option or answer text)\",
                 \"explanation\": \"string (short educational explanation)\"

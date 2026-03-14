@@ -108,16 +108,18 @@ class QuizController extends Controller
             'title' => 'nullable|string|max:255',
             'count' => "required|integer|min:1|max:{$user->max_questions_per_quiz}",
             'types' => 'required|array',
+            'type_counts' => 'nullable|array',
         ]);
 
         try {
             $quiz = $this->quizService->generateFromUpload(
                 $request->file('file'),
-                $user->id,
+                $userId = $user->id,
                 [
                     'title' => filled($request->input('title')) ? $request->input('title') : null,
                     'count' => (int) $request->input('count', 10),
                     'types' => $request->input('types', []),
+                    'type_counts' => $request->input('type_counts', []),
                 ]
             );
 
