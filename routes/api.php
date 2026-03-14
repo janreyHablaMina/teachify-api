@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AuthController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/register', [AuthController::class, 'register']);
+Route::post('/register-student', [AuthController::class, 'registerStudent']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
 Route::get('/me', [AuthController::class, 'me'])->middleware('auth:sanctum');
@@ -28,4 +29,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/classrooms', [\App\Http\Controllers\Api\ClassroomController::class, 'store']);
     Route::get('/classrooms/{classroom}', [\App\Http\Controllers\Api\ClassroomController::class, 'show']);
     Route::delete('/classrooms/{classroom}', [\App\Http\Controllers\Api\ClassroomController::class, 'destroy']);
+    Route::patch('/classrooms/{classroom}/invite-expiration', [\App\Http\Controllers\Api\ClassroomController::class, 'updateInviteExpiration']);
+    Route::post('/classrooms/join-by-code', [\App\Http\Controllers\Api\ClassroomController::class, 'joinByCode']);
 });

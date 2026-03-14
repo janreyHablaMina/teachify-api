@@ -97,6 +97,51 @@ class AuthController extends Controller
         ], 201);
     }
 
+    public function registerStudent(Request $request): JsonResponse
+    {
+        $request->merge([
+            'email' => mb_strtolower(trim((string) $request->input('email'))),
+        ]);
+
+        $validated = $request->validate([
+            'firstname' => ['required', 'string', 'max:255'],
+            'middlename' => ['nullable', 'string', 'max:255'],
+            'lastname' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'join_code' => ['required', 'string', 'exists:classrooms,join_code'],
+        ]);
+
+        $classroom = \App\Models\Classroom::where('join_code', $validated['join_code'])->first();
+
+        if ($classroom->invite_expires_at && now()->isAfter($classroom->invite_expires_at)) {
+            return response()->json([
+                'message' => 'This invite link or join code has expired. Please ask your teacher for a new one.',
+            ], 422);
+        }
+
+        $fullname = trim($validated['firstname'] . ' ' . ($validated['middlename'] ?? '') . ' ' . $validated['lastname']);
+        $fullname = str_replace('  ', ' ', $fullname);
+
+        $user = User::create([
+            'fullname' => $fullname,
+            'email' => $validated['email'],
+            'password' => $validated['password'],
+            'role' => 'student',
+            'plan' => 'free',
+        ]);
+
+        $classroom->students()->attach($user->id);
+
+        Auth::login($user);
+        $request->session()->regenerate();
+
+        return response()->json([
+            'message' => 'Student registered and enrolled successfully.',
+            'user' => $user,
+        ], 201);
+    }
+
     public function login(Request $request): JsonResponse
     {
         $request->merge([

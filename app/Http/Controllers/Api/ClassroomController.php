@@ -11,8 +11,16 @@ class ClassroomController extends Controller
 {
     public function index(Request $request)
     {
+        $user = $request->user();
+        
+        if ($user->role === 'student') {
+            return response()->json(
+                $user->enrolledClassrooms()->withCount('students')->with('teacher:id,fullname')->latest()->get()
+            );
+        }
+
         return response()->json(
-            $request->user()->classrooms()->withCount('students')->latest()->get()
+            $user->classrooms()->withCount('students')->latest()->get()
         );
     }
 
@@ -57,6 +65,56 @@ class ClassroomController extends Controller
 
         return response()->json([
             'message' => 'Classroom deleted successfully',
+        ]);
+    }
+
+    public function updateInviteExpiration(Request $request, Classroom $classroom)
+    {
+        if (auth()->id() !== $classroom->user_id) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $validated = $request->validate([
+            'expires_at' => 'nullable|date|after:now',
+        ]);
+
+        $classroom->update([
+            'invite_expires_at' => $validated['expires_at'],
+        ]);
+
+        return response()->json([
+            'message' => 'Invite expiration updated successfully',
+            'invite_expires_at' => $classroom->invite_expires_at,
+        ]);
+    }
+
+    public function joinByCode(Request $request)
+    {
+        $validated = $request->validate([
+            'join_code' => 'required|string|size:6',
+        ]);
+
+        $classroom = Classroom::where('join_code', strtoupper($validated['join_code']))->first();
+
+        if (!$classroom) {
+            return response()->json(['message' => 'Invalid classroom code. Please check and try again.'], 404);
+        }
+
+        if (!$classroom->is_active) {
+            return response()->json(['message' => 'This classroom is no longer active.'], 403);
+        }
+
+        $user = $request->user();
+
+        if ($user->enrolledClassrooms()->where('classroom_id', $classroom->id)->exists()) {
+            return response()->json(['message' => 'You are already enrolled in this classroom.'], 409);
+        }
+
+        $user->enrolledClassrooms()->attach($classroom->id);
+
+        return response()->json([
+            'message' => "Successfully joined {$classroom->name}!",
+            'classroom' => $classroom->loadCount('students'),
         ]);
     }
 }
