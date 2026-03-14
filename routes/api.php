@@ -27,6 +27,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/classrooms', [\App\Http\Controllers\Api\ClassroomController::class, 'index']);
     Route::post('/classrooms', [\App\Http\Controllers\Api\ClassroomController::class, 'store']);
+    Route::put('/classrooms/{classroom}', [\App\Http\Controllers\Api\ClassroomController::class, 'update']);
     Route::get('/classrooms/{classroom}', [\App\Http\Controllers\Api\ClassroomController::class, 'show']);
     Route::delete('/classrooms/{classroom}', [\App\Http\Controllers\Api\ClassroomController::class, 'destroy']);
     Route::patch('/classrooms/{classroom}/invite-expiration', [\App\Http\Controllers\Api\ClassroomController::class, 'updateInviteExpiration']);

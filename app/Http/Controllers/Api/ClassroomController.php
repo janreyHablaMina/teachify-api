@@ -46,6 +46,27 @@ class ClassroomController extends Controller
         ], 201);
     }
 
+    public function update(Request $request, Classroom $classroom)
+    {
+        if (auth()->id() !== $classroom->user_id) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'room' => 'nullable|string|max:255',
+            'schedule' => 'nullable|string|max:255',
+            'is_active' => 'boolean',
+        ]);
+
+        $classroom->update($validated);
+
+        return response()->json([
+            'message' => 'Classroom updated successfully',
+            'classroom' => $classroom->loadCount('students'),
+        ]);
+    }
+
     public function show(Classroom $classroom)
     {
         if (auth()->id() !== $classroom->user_id) {
