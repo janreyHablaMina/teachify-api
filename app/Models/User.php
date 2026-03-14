@@ -64,4 +64,14 @@ class User extends Authenticatable
     {
         return $this->hasMany(Quiz::class);
     }
+
+    public function classrooms()
+    {
+        return $this->hasMany(Classroom::class);
+    }
+
+    public function enrolledClassrooms()
+    {
+        return $this->belongsToMany(Classroom::class, 'classroom_student');
+    }
 }

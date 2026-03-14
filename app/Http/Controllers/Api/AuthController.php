@@ -40,6 +40,12 @@ class AuthController extends Controller
         if ($planTier === 'basic') {
             $user->quiz_generation_limit = 50;
             $user->max_questions_per_quiz = 50;
+        } elseif ($planTier === 'pro') {
+            $user->quiz_generation_limit = 200;
+            $user->max_questions_per_quiz = 50;
+        } elseif ($planTier === 'school') {
+            $user->quiz_generation_limit = 1000;
+            $user->max_questions_per_quiz = 50;
         }
 
         return $user;

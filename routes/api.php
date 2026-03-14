@@ -23,4 +23,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/quizzes/{quiz}/duplicate', [\App\Http\Controllers\Api\QuizController::class, 'duplicate']);
     Route::get('/quizzes/{quiz}/export-pdf', [\App\Http\Controllers\Api\QuizController::class, 'exportPdf']);
     Route::post('/quizzes/generate-from-upload', [\App\Http\Controllers\Api\QuizController::class, 'generateFromUpload']);
+
+    Route::get('/classrooms', [\App\Http\Controllers\Api\ClassroomController::class, 'index']);
+    Route::post('/classrooms', [\App\Http\Controllers\Api\ClassroomController::class, 'store']);
+    Route::get('/classrooms/{classroom}', [\App\Http\Controllers\Api\ClassroomController::class, 'show']);
+    Route::delete('/classrooms/{classroom}', [\App\Http\Controllers\Api\ClassroomController::class, 'destroy']);
 });

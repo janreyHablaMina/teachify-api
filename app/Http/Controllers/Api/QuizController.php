@@ -42,13 +42,9 @@ class QuizController extends Controller
         }
 
         $user = auth()->user();
-        $plan = $user->plan ?? 'free';
-        $isMonthlyPlan = in_array($plan, ['basic', 'pro', 'school'], true);
         $quiz->delete();
-        $user->quizzes_used = $isMonthlyPlan
-            ? $user->quizzes()->whereMonth('created_at', now()->month)->whereYear('created_at', now()->year)->count()
-            : $user->quizzes()->count();
-        $user->save();
+        
+        $this->updateUserUsage($user);
 
         return response()->json([
             'message' => 'Quiz deleted successfully',
@@ -62,16 +58,9 @@ class QuizController extends Controller
         }
 
         $user = auth()->user();
-        $plan = $user->plan ?? 'free';
-        $isMonthlyPlan = in_array($plan, ['basic', 'pro', 'school'], true);
-        $limit = $plan === 'basic' ? 50 : (int) ($user->quiz_generation_limit ?? 3);
-        $used = $isMonthlyPlan
-            ? $user->quizzes()->whereMonth('created_at', now()->month)->whereYear('created_at', now()->year)->count()
-            : $user->quizzes()->count();
-        if ($used >= $limit) {
-            $planLabel = $plan === 'basic' ? 'Basic Plan' : 'Free Plan';
+        if ($this->isLimitReached($user)) {
             return response()->json([
-                'error' => "You have reached the {$planLabel} limit ({$limit} quiz generations). Upgrade to continue using Teachify AI.",
+                'error' => "You have reached your plan limit ({$user->quiz_generation_limit} quiz generations). Upgrade to continue using Teachify AI.",
             ], 403);
         }
 
@@ -94,14 +83,7 @@ class QuizController extends Controller
             ]);
         }
 
-        $user->quizzes_used = $isMonthlyPlan
-            ? $user->quizzes()->whereMonth('created_at', now()->month)->whereYear('created_at', now()->year)->count()
-            : $user->quizzes()->count();
-        if ($plan === 'basic') {
-            $user->quiz_generation_limit = 50;
-            $user->max_questions_per_quiz = 50;
-        }
-        $user->save();
+        $this->updateUserUsage($user);
 
         return response()->json([
             'message' => 'Quiz duplicated successfully',
@@ -112,24 +94,19 @@ class QuizController extends Controller
     public function generateFromUpload(Request $request)
     {
         $user = $request->user();
-        $plan = $user->plan ?? 'free';
-        $isMonthlyPlan = in_array($plan, ['basic', 'pro', 'school'], true);
-        $limit = $plan === 'basic' ? 50 : (int) ($user->quiz_generation_limit ?? 3);
-        $used = $isMonthlyPlan
-            ? $user->quizzes()->whereMonth('created_at', now()->month)->whereYear('created_at', now()->year)->count()
-            : $user->quizzes()->count();
-        if ($used >= $limit) {
-            $planLabel = $plan === 'basic' ? 'Basic Plan' : 'Free Plan';
+        if ($this->isLimitReached($user)) {
             return response()->json([
-                'error' => "You have reached the {$planLabel} limit ({$limit} quiz generations). Upgrade to continue using Teachify AI.",
+                'error' => "You have reached your plan limit ({$user->quiz_generation_limit} quiz generations). Upgrade to continue using Teachify AI.",
             ], 403);
         }
 
-        $allowedMimes = $plan === 'basic' ? 'pdf,docx,pptx' : 'pdf';
+        $plan = $user->plan ?? 'free';
+        $allowedMimes = in_array($plan, ['basic', 'pro', 'school']) ? 'pdf,docx,pptx' : 'pdf';
+        
         $request->validate([
             'file' => "required|file|mimes:{$allowedMimes}|max:5120",
             'title' => 'nullable|string|max:255',
-            'count' => 'required|integer|min:1|max:50',
+            'count' => "required|integer|min:1|max:{$user->max_questions_per_quiz}",
             'types' => 'required|array',
         ]);
 
@@ -144,14 +121,7 @@ class QuizController extends Controller
                 ]
             );
 
-            $user->quizzes_used = $isMonthlyPlan
-                ? $user->quizzes()->whereMonth('created_at', now()->month)->whereYear('created_at', now()->year)->count()
-                : $user->quizzes()->count();
-            if ($plan === 'basic') {
-                $user->quiz_generation_limit = 50;
-                $user->max_questions_per_quiz = 50;
-            }
-            $user->save();
+            $this->updateUserUsage($user);
 
             return response()->json([
                 'message' => 'Quiz generated successfully',
@@ -160,6 +130,30 @@ class QuizController extends Controller
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);
         }
+    }
+
+    private function isLimitReached($user): bool
+    {
+        $plan = $user->plan ?? 'free';
+        $isMonthlyPlan = in_array($plan, ['basic', 'pro', 'school'], true);
+        
+        $used = $isMonthlyPlan
+            ? $user->quizzes()->whereMonth('created_at', now()->month)->whereYear('created_at', now()->year)->count()
+            : $user->quizzes()->count();
+
+        return $used >= ($user->quiz_generation_limit ?? 3);
+    }
+
+    private function updateUserUsage($user): void
+    {
+        $plan = $user->plan ?? 'free';
+        $isMonthlyPlan = in_array($plan, ['basic', 'pro', 'school'], true);
+        
+        $user->quizzes_used = $isMonthlyPlan
+            ? $user->quizzes()->whereMonth('created_at', now()->month)->whereYear('created_at', now()->year)->count()
+            : $user->quizzes()->count();
+        
+        $user->save();
     }
 
     public function exportPdf(Request $request, Quiz $quiz)
