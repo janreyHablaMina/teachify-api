@@ -8,6 +8,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Throwable;
 
@@ -176,18 +177,34 @@ class AuthController extends Controller
             'password' => ['required', 'string'],
         ]);
 
-        if (! Auth::attempt($credentials)) {
+        $user = User::where('email', $credentials['email'])->first();
+
+        if (! $user || ! Hash::check($credentials['password'], $user->password)) {
             return response()->json([
                 'message' => 'Invalid credentials.',
             ], 422);
         }
 
-        $request->session()->regenerate();
+        $authMode = 'session';
+        $token = null;
+
+        try {
+            Auth::login($user);
+            $request->session()->regenerate();
+            $authedUser = $request->user() ?? $user;
+        } catch (Throwable $e) {
+            report($e);
+            $authMode = 'token';
+            $token = $user->createToken('web-login')->plainTextToken;
+            $authedUser = $user;
+        }
 
         return response()->json([
             'message' => 'Login successful.',
-            'user' => $this->applyPlanCapabilities($request->user()),
-            'plan_tier' => $this->resolvePlanTier($request->user()?->plan),
+            'user' => $this->applyPlanCapabilities($authedUser),
+            'plan_tier' => $this->resolvePlanTier($authedUser?->plan),
+            'auth_mode' => $authMode,
+            'token' => $token,
         ]);
     }
 
