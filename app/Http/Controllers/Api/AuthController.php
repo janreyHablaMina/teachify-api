@@ -7,7 +7,9 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Throwable;
 
 class AuthController extends Controller
 {
@@ -76,25 +78,42 @@ class AuthController extends Controller
             ], 422);
         }
 
-        $user = User::create([
-            'fullname' => $validated['fullname'],
-            'email' => $validated['email'],
-            'password' => $validated['password'],
-            'role' => $validated['role'] ?? 'teacher',
-            'plan' => 'free',
-            'quiz_generation_limit' => 3,
-            'quizzes_used' => 0,
-            'max_questions_per_quiz' => 10,
-        ]);
+        try {
+            $payload = DB::transaction(function () use ($request, $validated) {
+                $user = User::create([
+                    'fullname' => $validated['fullname'],
+                    'email' => $validated['email'],
+                    'password' => $validated['password'],
+                    'role' => $validated['role'] ?? 'teacher',
+                    'plan' => 'free',
+                    'quiz_generation_limit' => 3,
+                    'quizzes_used' => 0,
+                    'max_questions_per_quiz' => 10,
+                ]);
 
-        Auth::login($user);
-        $request->session()->regenerate();
+                Auth::login($user);
+                $request->session()->regenerate();
 
-        return response()->json([
-            'message' => 'Registration successful.',
-            'user' => $this->applyPlanCapabilities($request->user()),
-            'plan_tier' => $this->resolvePlanTier($request->user()?->plan),
-        ], 201);
+                $authedUser = $request->user();
+
+                return [
+                    'user' => $this->applyPlanCapabilities($authedUser),
+                    'plan_tier' => $this->resolvePlanTier($authedUser?->plan),
+                ];
+            });
+
+            return response()->json([
+                'message' => 'Registration successful.',
+                'user' => $payload['user'],
+                'plan_tier' => $payload['plan_tier'],
+            ], 201);
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'message' => 'Registration failed due to a server configuration issue. Please try again shortly.',
+            ], 500);
+        }
     }
 
     public function registerStudent(Request $request): JsonResponse
@@ -123,23 +142,35 @@ class AuthController extends Controller
         $fullname = trim($validated['firstname'] . ' ' . ($validated['middlename'] ?? '') . ' ' . $validated['lastname']);
         $fullname = str_replace('  ', ' ', $fullname);
 
-        $user = User::create([
-            'fullname' => $fullname,
-            'email' => $validated['email'],
-            'password' => $validated['password'],
-            'role' => 'student',
-            'plan' => 'free',
-        ]);
+        try {
+            $user = DB::transaction(function () use ($request, $validated, $classroom, $fullname) {
+                $user = User::create([
+                    'fullname' => $fullname,
+                    'email' => $validated['email'],
+                    'password' => $validated['password'],
+                    'role' => 'student',
+                    'plan' => 'free',
+                ]);
 
-        $classroom->students()->attach($user->id);
+                $classroom->students()->attach($user->id);
 
-        Auth::login($user);
-        $request->session()->regenerate();
+                Auth::login($user);
+                $request->session()->regenerate();
 
-        return response()->json([
-            'message' => 'Student registered and enrolled successfully.',
-            'user' => $user,
-        ], 201);
+                return $request->user();
+            });
+
+            return response()->json([
+                'message' => 'Student registered and enrolled successfully.',
+                'user' => $user,
+            ], 201);
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'message' => 'Student registration failed due to a server configuration issue. Please try again shortly.',
+            ], 500);
+        }
     }
 
     public function login(Request $request): JsonResponse
