@@ -28,7 +28,7 @@ class AuthController extends Controller
     {
         return match ($plan) {
             'basic', 'pro', 'school' => $plan,
-            default => 'trial', // Maps legacy "free" to trial
+            default => 'trial',
         };
     }
 
@@ -79,7 +79,7 @@ class AuthController extends Controller
         }
 
         try {
-            $payload = DB::transaction(function () use ($request, $validated) {
+            $payload = DB::transaction(function () use ($validated) {
                 $user = User::create([
                     'fullname' => $validated['fullname'],
                     'email' => $validated['email'],
@@ -91,14 +91,9 @@ class AuthController extends Controller
                     'max_questions_per_quiz' => 10,
                 ]);
 
-                Auth::login($user);
-                $request->session()->regenerate();
-
-                $authedUser = $request->user();
-
                 return [
-                    'user' => $this->applyPlanCapabilities($authedUser),
-                    'plan_tier' => $this->resolvePlanTier($authedUser?->plan),
+                    'user' => $this->applyPlanCapabilities($user),
+                    'plan_tier' => $this->resolvePlanTier($user->plan),
                 ];
             });
 
@@ -143,7 +138,7 @@ class AuthController extends Controller
         $fullname = str_replace('  ', ' ', $fullname);
 
         try {
-            $user = DB::transaction(function () use ($request, $validated, $classroom, $fullname) {
+            $user = DB::transaction(function () use ($validated, $classroom, $fullname) {
                 $user = User::create([
                     'fullname' => $fullname,
                     'email' => $validated['email'],
@@ -154,10 +149,7 @@ class AuthController extends Controller
 
                 $classroom->students()->attach($user->id);
 
-                Auth::login($user);
-                $request->session()->regenerate();
-
-                return $request->user();
+                return $user;
             });
 
             return response()->json([
