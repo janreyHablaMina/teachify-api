@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
@@ -95,6 +94,7 @@ class AuthController extends Controller
                 return [
                     'user' => $this->applyPlanCapabilities($user),
                     'plan_tier' => $this->resolvePlanTier($user->plan),
+                    'token' => $user->createToken('web-register')->plainTextToken,
                 ];
             });
 
@@ -102,6 +102,8 @@ class AuthController extends Controller
                 'message' => 'Registration successful.',
                 'user' => $payload['user'],
                 'plan_tier' => $payload['plan_tier'],
+                'auth_mode' => 'token',
+                'token' => $payload['token'],
             ], 201);
         } catch (Throwable $e) {
             report($e);
@@ -139,7 +141,7 @@ class AuthController extends Controller
         $fullname = str_replace('  ', ' ', $fullname);
 
         try {
-            $user = DB::transaction(function () use ($validated, $classroom, $fullname) {
+            $payload = DB::transaction(function () use ($validated, $classroom, $fullname) {
                 $user = User::create([
                     'fullname' => $fullname,
                     'email' => $validated['email'],
@@ -150,12 +152,17 @@ class AuthController extends Controller
 
                 $classroom->students()->attach($user->id);
 
-                return $user;
+                return [
+                    'user' => $user,
+                    'token' => $user->createToken('student-register')->plainTextToken,
+                ];
             });
 
             return response()->json([
                 'message' => 'Student registered and enrolled successfully.',
-                'user' => $user,
+                'user' => $payload['user'],
+                'auth_mode' => 'token',
+                'token' => $payload['token'],
             ], 201);
         } catch (Throwable $e) {
             report($e);
@@ -185,35 +192,21 @@ class AuthController extends Controller
             ], 422);
         }
 
-        $authMode = 'session';
-        $token = null;
-
-        try {
-            Auth::login($user);
-            $request->session()->regenerate();
-            $authedUser = $request->user() ?? $user;
-        } catch (Throwable $e) {
-            report($e);
-            $authMode = 'token';
-            $token = $user->createToken('web-login')->plainTextToken;
-            $authedUser = $user;
-        }
+        $user->tokens()->delete();
+        $token = $user->createToken('web-login')->plainTextToken;
 
         return response()->json([
             'message' => 'Login successful.',
-            'user' => $this->applyPlanCapabilities($authedUser),
-            'plan_tier' => $this->resolvePlanTier($authedUser?->plan),
-            'auth_mode' => $authMode,
+            'user' => $this->applyPlanCapabilities($user),
+            'plan_tier' => $this->resolvePlanTier($user->plan),
+            'auth_mode' => 'token',
             'token' => $token,
         ]);
     }
 
     public function logout(Request $request): JsonResponse
     {
-        Auth::guard('web')->logout();
-
-        $request->session()->invalidate();
-        $request->session()->regenerateToken();
+        $request->user()?->currentAccessToken()?->delete();
 
         return response()->json([
             'message' => 'Logout successful.',
