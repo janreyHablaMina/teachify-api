@@ -125,6 +125,10 @@ class ClassroomController extends Controller
             return response()->json(['message' => 'This classroom is no longer active.'], 403);
         }
 
+        if ($classroom->invite_expires_at && now()->isAfter($classroom->invite_expires_at)) {
+            return response()->json(['message' => 'This invitation link has expired. Please contact your teacher.'], 403);
+        }
+
         $user = $request->user();
 
         if ($user->enrolledClassrooms()->where('classroom_id', $classroom->id)->exists()) {

@@ -13,10 +13,12 @@ class Classroom extends Model
         'schedule',
         'join_code',
         'is_active',
+        'invite_expires_at',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
+        'invite_expires_at' => 'datetime',
     ];
 
     public function teacher()
