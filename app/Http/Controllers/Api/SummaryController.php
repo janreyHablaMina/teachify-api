@@ -54,6 +54,25 @@ class SummaryController extends Controller
         }
     }
 
+    public function store(Request $request)
+    {
+        $request->validate([
+            'topic' => 'required|string|max:255',
+            'content' => 'required',
+        ]);
+
+        $summary = Summary::create([
+            'user_id' => $request->user()->id,
+            'topic' => $request->topic,
+            'content' => is_array($request->content) ? json_encode($request->content) : $request->content,
+        ]);
+
+        return response()->json([
+            'message' => 'Summary stored successfully',
+            'summary' => $summary,
+        ]);
+    }
+
     public function exportPdf(Summary $summary)
     {
         // Simple auth check

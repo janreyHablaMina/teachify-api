@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/summaries', [SummaryController::class, 'index']);
+    Route::post('/summaries', [SummaryController::class, 'store']);
     Route::post('/summaries/generate', [SummaryController::class, 'generate']);
     Route::get('/summaries/{summary}/export-pdf', [SummaryController::class, 'exportPdf']);
 
