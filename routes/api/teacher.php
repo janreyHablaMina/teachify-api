@@ -27,6 +27,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/classrooms/{classroom}', [ClassroomController::class, 'show']);
     Route::delete('/classrooms/{classroom}', [ClassroomController::class, 'destroy']);
     Route::patch('/classrooms/{classroom}/invite-expiration', [ClassroomController::class, 'updateInviteExpiration']);
+    Route::post('/classrooms/{classroom}/students/{student}/approve', [ClassroomController::class, 'approveStudent']);
+    Route::post('/classrooms/{classroom}/students/{student}/reject', [ClassroomController::class, 'rejectStudent']);
     Route::post('/classrooms/{classroom}/assignments', [AssignmentController::class, 'store']);
     Route::get('/assignments', [AssignmentController::class, 'index']);
     Route::get('/assignments/{assignment}', [AssignmentController::class, 'show']);

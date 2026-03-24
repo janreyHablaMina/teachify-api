@@ -14,7 +14,10 @@ class SubmissionController extends Controller
         $user = $request->user();
         
         // Ensure student is enrolled
-        $isEnrolled = $user->enrolledClassrooms()->where('classrooms.id', $assignment->classroom_id)->exists();
+        $isEnrolled = $user->enrolledClassrooms()
+            ->wherePivot('status', 'approved')
+            ->where('classrooms.id', $assignment->classroom_id)
+            ->exists();
         if (!$isEnrolled) {
             return response()->json(['error' => 'You are not enrolled in this classroom.'], 403);
         }

@@ -28,7 +28,9 @@ class Classroom extends Model
 
     public function students()
     {
-        return $this->belongsToMany(User::class, 'classroom_student');
+        return $this->belongsToMany(User::class, 'classroom_student')
+            ->withPivot('status')
+            ->withTimestamps();
     }
 
     public function assignments()

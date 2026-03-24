@@ -72,6 +72,8 @@ class User extends Authenticatable
 
     public function enrolledClassrooms()
     {
-        return $this->belongsToMany(Classroom::class, 'classroom_student');
+        return $this->belongsToMany(Classroom::class, 'classroom_student')
+            ->withPivot('status')
+            ->withTimestamps();
     }
 }

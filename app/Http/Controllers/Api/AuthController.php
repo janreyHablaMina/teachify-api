@@ -118,6 +118,7 @@ class AuthController extends Controller
     {
         $request->merge([
             'email' => mb_strtolower(trim((string) $request->input('email'))),
+            'join_code' => strtoupper(trim((string) $request->input('join_code'))),
         ]);
 
         $validated = $request->validate([
@@ -150,7 +151,9 @@ class AuthController extends Controller
                     'plan' => 'free',
                 ]);
 
-                $classroom->students()->attach($user->id);
+                $classroom->students()->attach($user->id, [
+                    'status' => 'pending',
+                ]);
 
                 return [
                     'user' => $user,
@@ -159,7 +162,7 @@ class AuthController extends Controller
             });
 
             return response()->json([
-                'message' => 'Student registered and enrolled successfully.',
+                'message' => 'Student registered successfully. Enrollment request is pending teacher approval.',
                 'user' => $payload['user'],
                 'auth_mode' => 'token',
                 'token' => $payload['token'],
