@@ -73,6 +73,18 @@ class SummaryController extends Controller
         ]);
     }
 
+    public function destroy(Summary $summary)
+    {
+        if (auth()->id() !== $summary->user_id) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $summary->delete();
+
+        return response()->json([
+            'message' => 'Summary deleted successfully',
+        ]);
+    }
     public function exportPdf(Summary $summary)
     {
         // Simple auth check
@@ -99,3 +111,5 @@ class SummaryController extends Controller
             ->header('Content-Disposition', 'attachment; filename="' . str($summary->topic)->slug() . '.pdf"');
     }
 }
+
+

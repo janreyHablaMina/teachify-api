@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/summaries', [SummaryController::class, 'index']);
     Route::post('/summaries', [SummaryController::class, 'store']);
+    Route::delete('/summaries/{summary}', [SummaryController::class, 'destroy']);
     Route::post('/summaries/generate', [SummaryController::class, 'generate']);
     Route::get('/summaries/{summary}/export-pdf', [SummaryController::class, 'exportPdf']);
 
@@ -32,3 +33,4 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/assignments/{assignment}/submit', [SubmissionController::class, 'store']);
     Route::post('/classrooms/join-by-code', [ClassroomController::class, 'joinByCode']);
 });
+
