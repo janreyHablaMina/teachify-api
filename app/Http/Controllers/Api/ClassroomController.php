@@ -17,7 +17,6 @@ class ClassroomController extends Controller
         if ($user->role === 'student') {
             return response()->json(
                 $user->enrolledClassrooms()
-                    ->wherePivot('status', 'approved')
                     ->withCount('students')
                     ->with('teacher:id,fullname')
                     ->latest()
