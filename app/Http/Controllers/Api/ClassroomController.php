@@ -219,4 +219,32 @@ class ClassroomController extends Controller
             'message' => 'Student enrollment request rejected.',
         ]);
     }
+
+    public function updateStudentStatus(Request $request, Classroom $classroom, User $student)
+    {
+        if ($request->user()->id !== $classroom->user_id) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        if ($student->role !== 'student') {
+            return response()->json(['message' => 'Selected user is not a student.'], 422);
+        }
+
+        if (! $classroom->students()->where('users.id', $student->id)->exists()) {
+            return response()->json(['message' => 'Student is not linked to this classroom.'], 404);
+        }
+
+        $validated = $request->validate([
+            'status' => 'required|string|in:pending,approved,suspended,rejected',
+        ]);
+
+        $classroom->students()->updateExistingPivot($student->id, [
+            'status' => $validated['status'],
+        ]);
+
+        return response()->json([
+            'message' => 'Student status updated successfully.',
+            'status' => $validated['status'],
+        ]);
+    }
 }
