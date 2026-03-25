@@ -62,6 +62,22 @@ class AssignmentController extends Controller
             'assignment' => $assignment->load('quiz')
         ], 201);
     }
+
+    public function storeDirect(Request $request)
+    {
+        $validated = $request->validate([
+            'classroom_id' => 'required|exists:classrooms,id',
+            'quiz_id' => 'required|exists:quizzes,id',
+            'deadline_at' => 'nullable|date|after:now',
+            'is_randomized' => 'boolean',
+            'anti_cheat_mode' => 'boolean',
+        ]);
+
+        $classroom = Classroom::findOrFail($validated['classroom_id']);
+
+        return $this->store($request, $classroom);
+    }
+
     public function show(Assignment $assignment, Request $request)
     {
         $user = $request->user();

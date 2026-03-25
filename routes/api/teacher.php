@@ -31,6 +31,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/classrooms/{classroom}/students/{student}/reject', [ClassroomController::class, 'rejectStudent']);
     Route::patch('/classrooms/{classroom}/students/{student}/status', [ClassroomController::class, 'updateStudentStatus']);
     Route::post('/classrooms/{classroom}/assignments', [AssignmentController::class, 'store']);
+    Route::post('/assignments', [AssignmentController::class, 'storeDirect']);
     Route::get('/assignments', [AssignmentController::class, 'index']);
     Route::get('/assignments/{assignment}', [AssignmentController::class, 'show']);
     Route::post('/assignments/{assignment}/submit', [SubmissionController::class, 'store']);
