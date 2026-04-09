@@ -80,6 +80,7 @@ class QuizController extends Controller
                 'options' => $question->options,
                 'correct_answer' => $question->correct_answer,
                 'explanation' => $question->explanation,
+                'points' => max(1, (int) ($question->points ?? 1)),
             ]);
         }
 

@@ -82,6 +82,7 @@ class AssignmentController extends Controller
             'quiz_payload.questions.*.choices.*' => 'nullable|string',
             'quiz_payload.questions.*.answer' => 'nullable|string',
             'quiz_payload.questions.*.explanation' => 'nullable|string',
+            'quiz_payload.questions.*.points' => 'nullable|integer|min:1|max:100',
         ]);
 
         $classroom = Classroom::findOrFail($validated['classroom_id']);
@@ -127,6 +128,7 @@ class AssignmentController extends Controller
                     'options' => isset($questionData['choices']) && is_array($questionData['choices']) ? $questionData['choices'] : null,
                     'correct_answer' => $questionData['answer'] ?? null,
                     'explanation' => $questionData['explanation'] ?? null,
+                    'points' => max(1, min(100, (int) ($questionData['points'] ?? 1))),
                 ]);
             }
         }

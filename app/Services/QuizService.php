@@ -116,6 +116,8 @@ class QuizService
 
                 $questionText = (string) $q['question_text'];
                 $correctAnswer = (string) $q['correct_answer'];
+                $parsedPoints = isset($q['points']) ? (int) $q['points'] : 1;
+                $points = max(1, min(100, $parsedPoints));
                 if (mb_strlen($correctAnswer) > 250) {
                     $correctAnswer = mb_substr($correctAnswer, 0, 250);
                 }
@@ -127,6 +129,7 @@ class QuizService
                     'options' => $questionType === 'multiple_choice' ? ($q['options'] ?? null) : null,
                     'correct_answer' => $correctAnswer,
                     'explanation' => $q['explanation'] ?? null,
+                    'points' => $points,
                 ]);
                 $createdCount++;
             }

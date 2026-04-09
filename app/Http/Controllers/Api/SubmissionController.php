@@ -33,18 +33,20 @@ class SubmissionController extends Controller
 
         // Basic auto-grading logic
         $quiz = $assignment->quiz()->with('questions')->first();
-        $totalQuestions = $quiz->questions->count();
-        $score = 0;
+        $totalPoints = 0;
+        $earnedPoints = 0;
         $gradedAnswers = [];
 
         foreach ($quiz->questions as $question) {
+            $questionPoints = max(1, (int) ($question->points ?? 1));
+            $totalPoints += $questionPoints;
             // Student answer might be an index if it's multiple choice, but usually it's the text from current UI
             $studentAnswer = $validated['answers'][$question->id] ?? null;
             $isCorrect = false;
             
             if ($studentAnswer !== null) {
                 if (trim(strtolower($studentAnswer)) === trim(strtolower($question->correct_answer))) {
-                    $score++;
+                    $earnedPoints += $questionPoints;
                     $isCorrect = true;
                 }
             }
@@ -52,11 +54,13 @@ class SubmissionController extends Controller
             $gradedAnswers[$question->id] = [
                 'answer' => $studentAnswer,
                 'is_correct' => $isCorrect,
-                'correct_answer' => $question->correct_answer
+                'correct_answer' => $question->correct_answer,
+                'points' => $questionPoints,
+                'earned_points' => $isCorrect ? $questionPoints : 0,
             ];
         }
 
-        $finalScore = ($totalQuestions > 0) ? ($score / $totalQuestions) * 100 : 0;
+        $finalScore = ($totalPoints > 0) ? ($earnedPoints / $totalPoints) * 100 : 0;
 
         $submission = Submission::create([
             'assignment_id' => $assignment->id,
