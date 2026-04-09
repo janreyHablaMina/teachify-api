@@ -3,11 +3,29 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class GenerationUsageController extends Controller
 {
+    private function resolveGenerationLimit(?User $user): int
+    {
+        if (! $user) {
+            return 3;
+        }
+
+        $plan = strtolower((string) ($user->plan ?? 'free'));
+
+        return match ($plan) {
+            'basic' => 50,
+            'pro' => 200,
+            // Storage column may be smaller, but runtime enforcement for School should still use 1000.
+            'school' => 1000,
+            default => max(0, (int) ($user->quiz_generation_limit ?? 3)),
+        };
+    }
+
     public function consume(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -24,7 +42,7 @@ class GenerationUsageController extends Controller
             ], 403);
         }
 
-        $limit = (int) ($user->quiz_generation_limit ?? 0);
+        $limit = $this->resolveGenerationLimit($user);
         $used = max(0, (int) ($user->quizzes_used ?? 0));
 
         if ($limit > 0 && $used >= $limit) {
