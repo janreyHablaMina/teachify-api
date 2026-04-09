@@ -39,7 +39,7 @@ class QuizService
             $limitedText = implode(' ', array_slice(explode(' ', $text), 0, 3000));
 
             $questionCount = max(1, min((int) ($options['count'] ?? 10), 50));
-            $allowedTypes = ['multiple_choice', 'true_false', 'short_answer', 'essay', 'enumeration'];
+            $allowedTypes = ['multiple_choice', 'true_false', 'essay', 'enumeration', 'identification', 'fill_in_the_blanks'];
             $types = array_values(array_filter(
                 (array) ($options['types'] ?? ['multiple_choice']),
                 fn ($type) => in_array($type, $allowedTypes, true)
@@ -110,7 +110,7 @@ class QuizService
                 }
 
                 $questionType = $q['type'] ?? $types[0];
-                if (!in_array($questionType, $allowedTypes, true)) {
+                if (!in_array($questionType, $types, true)) {
                     $questionType = $types[0];
                 }
 
