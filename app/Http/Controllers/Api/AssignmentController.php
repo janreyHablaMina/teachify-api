@@ -9,6 +9,7 @@ use App\Models\Quiz;
 use App\Models\Assignment;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Throwable;
 
 class AssignmentController extends Controller
@@ -140,12 +141,21 @@ class AssignmentController extends Controller
                 }
 
                 $quiz = DB::transaction(function () use ($payload, $rawQuestions) {
-                    $createdQuiz = Quiz::create([
+                    $quizAttributes = [
                         'user_id' => auth()->id(),
                         'title' => $payload['title'] ?? 'Assigned Quiz',
                         'topic' => $payload['topic'] ?? null,
                         'type' => $payload['type'] ?? 'file',
-                    ]);
+                    ];
+                    // Keep compatibility with environments where quizzes has additional required columns.
+                    if (Schema::hasColumn('quizzes', 'difficulty')) {
+                        $quizAttributes['difficulty'] = $payload['difficulty'] ?? 'medium';
+                    }
+                    if (Schema::hasColumn('quizzes', 'questions_count')) {
+                        $quizAttributes['questions_count'] = is_array($rawQuestions) ? count($rawQuestions) : 0;
+                    }
+
+                    $createdQuiz = Quiz::create($quizAttributes);
 
                     foreach ($rawQuestions as $questionData) {
                         if (!is_array($questionData) || empty($questionData['question'])) {
@@ -159,14 +169,29 @@ class AssignmentController extends Controller
                             )))
                             : null;
 
-                        $createdQuiz->questions()->create([
+                        $questionAttributes = [
                             'type' => $questionData['type'] ?? 'multiple_choice',
                             'question_text' => $questionData['question'],
-                            'options' => $choices ?: null,
-                            'correct_answer' => $questionData['answer'] ?? null,
-                            'explanation' => $questionData['explanation'] ?? null,
                             'points' => max(1, min(100, (int) ($questionData['points'] ?? 1))),
-                        ]);
+                        ];
+
+                        if (Schema::hasColumn('questions', 'options')) {
+                            $questionAttributes['options'] = $choices ?: null;
+                        } elseif (Schema::hasColumn('questions', 'choices')) {
+                            $questionAttributes['choices'] = $choices ?: null;
+                        }
+
+                        if (Schema::hasColumn('questions', 'correct_answer')) {
+                            $questionAttributes['correct_answer'] = $questionData['answer'] ?? null;
+                        } elseif (Schema::hasColumn('questions', 'answer')) {
+                            $questionAttributes['answer'] = $questionData['answer'] ?? null;
+                        }
+
+                        if (Schema::hasColumn('questions', 'explanation')) {
+                            $questionAttributes['explanation'] = $questionData['explanation'] ?? null;
+                        }
+
+                        $createdQuiz->questions()->create($questionAttributes);
                     }
 
                     return $createdQuiz;
@@ -206,10 +231,12 @@ class AssignmentController extends Controller
                 'teacher_id' => auth()->id(),
                 'payload' => $request->all(),
                 'error' => $exception->getMessage(),
+                'trace' => $exception->getTraceAsString(),
             ]);
 
             return response()->json([
                 'message' => 'Unable to assign quiz right now. Please try again.',
+                'error' => $exception->getMessage(),
             ], 500);
         }
     }
