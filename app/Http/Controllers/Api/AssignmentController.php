@@ -24,11 +24,33 @@ class AssignmentController extends Controller
                 ->pluck('classrooms.id');
             
             $assignments = Assignment::whereIn('classroom_id', $classroomIds)
-                ->with(['quiz:id,title,topic', 'classroom:id,name,user_id', 'classroom.teacher:id,fullname'])
+                ->with([
+                    'quiz:id,title,topic',
+                    'classroom:id,name,user_id',
+                    'classroom.teacher:id,fullname',
+                    'submissions' => function ($query) use ($user) {
+                        $query->where('user_id', $user->id)->select('id', 'assignment_id', 'user_id', 'score', 'created_at');
+                    },
+                ])
                 ->latest()
                 ->get();
-                
-            return response()->json($assignments);
+
+            $mapped = $assignments->map(function ($assignment) {
+                $submission = $assignment->submissions->first();
+                $payload = $assignment->toArray();
+                $payload['has_submitted'] = (bool) $submission;
+                $payload['submission'] = $submission
+                    ? [
+                        'id' => $submission->id,
+                        'score' => $submission->score,
+                        'submitted_at' => $submission->created_at,
+                    ]
+                    : null;
+                unset($payload['submissions']);
+                return $payload;
+            });
+
+            return response()->json($mapped);
         }
 
         return response()->json([]);
@@ -260,6 +282,22 @@ class AssignmentController extends Controller
             }
         }
 
-        return response()->json($assignment->load(['quiz.questions', 'classroom.teacher:id,fullname']));
+        $assignment->load(['quiz.questions', 'classroom.teacher:id,fullname']);
+        $submission = $assignment->submissions()
+            ->where('user_id', $user->id)
+            ->latest()
+            ->first();
+        $payload = $assignment->toArray();
+        $payload['has_submitted'] = (bool) $submission;
+        $payload['submission'] = $submission
+            ? [
+                'id' => $submission->id,
+                'score' => $submission->score,
+                'submitted_at' => $submission->created_at,
+                'answers' => $submission->answers,
+            ]
+            : null;
+
+        return response()->json($payload);
     }
 }
