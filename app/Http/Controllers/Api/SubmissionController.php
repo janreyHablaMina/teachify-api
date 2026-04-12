@@ -50,6 +50,23 @@ class SubmissionController extends Controller
         }));
     }
 
+    private function isLowEffortEssay(?string $value): bool
+    {
+        $normalized = $this->normalizeText($value);
+        if ($normalized === '') return true;
+
+        if (preg_match('/\b(i\s*don\'?t\s*know|idk|no\s*idea|not\s*sure|guess|maybe)\b/i', $normalized)) {
+            return true;
+        }
+
+        if (preg_match('/\b(ha)+\b/i', $normalized)) {
+            return true;
+        }
+
+        $tokenCount = count($this->extractTokens($normalized));
+        return $tokenCount < 5;
+    }
+
     private function answersAreSimilar(string $left, string $right): bool
     {
         $a = $this->normalizeText($left);
@@ -75,12 +92,18 @@ class SubmissionController extends Controller
         if (count($studentTokens) === 0) return 0.0;
 
         $intersection = array_values(array_intersect($studentTokens, $correctTokens));
+        if (count($intersection) < 2) return 0.0;
+
         $precision = count($intersection) / max(1, count($studentTokens));
         $recall = count($intersection) / max(1, count($correctTokens));
+        if ($precision < 0.15 || $recall < 0.15) return 0.0;
+
         $f1 = ($precision + $recall) > 0 ? (2 * $precision * $recall) / ($precision + $recall) : 0.0;
 
         $lengthFactor = min(1.0, count($studentTokens) / max(8, (int) floor(count($correctTokens) * 0.5)));
-        $ratio = (0.8 * $f1) + (0.2 * $lengthFactor);
+        $ratio = (0.9 * $f1) + (0.1 * $lengthFactor);
+
+        if ($ratio < 0.35) return 0.0;
 
         return max(0.0, min(1.0, $ratio));
     }
@@ -127,6 +150,10 @@ class SubmissionController extends Controller
         }
 
         if ($type === 'essay') {
+            if ($this->isLowEffortEssay($student)) {
+                return [0, false, 'Essay response appears low-effort or uncertain.'];
+            }
+
             $ratio = $this->computeEssayRatio($student, $correct);
             $earned = (int) round($questionPoints * $ratio);
             return [
