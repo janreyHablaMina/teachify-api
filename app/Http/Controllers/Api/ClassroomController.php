@@ -78,7 +78,138 @@ class ClassroomController extends Controller
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
-        return response()->json($classroom->load(['students', 'assignments.quiz']));
+        $classroom->load([
+            'students',
+            'assignments.quiz.questions:id,quiz_id',
+            'assignments.submissions' => function ($query) {
+                $query->select('id', 'assignment_id', 'user_id', 'score', 'answers', 'created_at')
+                    ->latest('created_at');
+            },
+        ]);
+
+        $approvedStudents = $classroom->students
+            ->filter(function ($student) {
+                return ($student->pivot?->status ?? 'approved') === 'approved';
+            })
+            ->values();
+
+        $assignments = $classroom->assignments
+            ->map(function ($assignment) use ($approvedStudents) {
+                $questionCount = (int) ($assignment->quiz?->questions?->count() ?? 0);
+                $submissionsByStudentId = $assignment->submissions->keyBy('user_id');
+
+                $studentExamStatuses = $approvedStudents
+                    ->map(function ($student) use ($assignment, $submissionsByStudentId, $questionCount) {
+                        $submission = $submissionsByStudentId->get($student->id);
+
+                        if ($submission) {
+                            $answers = is_array($submission->answers) ? $submission->answers : [];
+                            $gradedItems = count($answers);
+                            $answeredItems = collect($answers)->filter(function ($entry) {
+                                if (!is_array($entry)) {
+                                    return trim((string) $entry) !== '';
+                                }
+
+                                return trim((string) ($entry['answer'] ?? '')) !== '';
+                            })->count();
+
+                            $completionRate = $gradedItems > 0
+                                ? round(($answeredItems / $gradedItems) * 100, 1)
+                                : null;
+                            $score = is_numeric($submission->score) ? (float) $submission->score : null;
+                            $needsAttention = ($completionRate !== null && $completionRate < 60.0)
+                                || ($score !== null && $score < 40.0);
+
+                            return [
+                                'student_id' => $student->id,
+                                'student_name' => $student->fullname,
+                                'student_email' => $student->email,
+                                'status' => $needsAttention ? 'needs_attention' : 'submitted',
+                                'submission_id' => $submission->id,
+                                'submitted_at' => $submission->created_at,
+                                'score' => $score,
+                                'completion_rate' => $completionRate,
+                                'answered_items' => $answeredItems,
+                                'graded_items' => $gradedItems,
+                            ];
+                        }
+
+                        $isOverdue = $assignment->deadline_at
+                            ? now()->greaterThan($assignment->deadline_at)
+                            : false;
+
+                        return [
+                            'student_id' => $student->id,
+                            'student_name' => $student->fullname,
+                            'student_email' => $student->email,
+                            'status' => $isOverdue ? 'not_taken' : 'in_progress',
+                            'submission_id' => null,
+                            'submitted_at' => null,
+                            'score' => null,
+                            'completion_rate' => null,
+                            'answered_items' => null,
+                            'graded_items' => $questionCount > 0 ? $questionCount : null,
+                        ];
+                    })
+                    ->values();
+
+                $statusCounts = [
+                    'submitted' => 0,
+                    'not_taken' => 0,
+                    'in_progress' => 0,
+                    'needs_attention' => 0,
+                ];
+
+                foreach ($studentExamStatuses as $studentStatus) {
+                    $status = (string) ($studentStatus['status'] ?? '');
+                    if (array_key_exists($status, $statusCounts)) {
+                        $statusCounts[$status]++;
+                    }
+                }
+
+                return [
+                    'id' => $assignment->id,
+                    'classroom_id' => $assignment->classroom_id,
+                    'deadline_at' => $assignment->deadline_at,
+                    'created_at' => $assignment->created_at,
+                    'quiz' => $assignment->quiz
+                        ? [
+                            'id' => $assignment->quiz->id,
+                            'title' => $assignment->quiz->title,
+                            'topic' => $assignment->quiz->topic,
+                            'question_count' => $questionCount,
+                        ]
+                        : null,
+                    'status_counts' => $statusCounts,
+                    'student_exam_statuses' => $studentExamStatuses,
+                ];
+            })
+            ->values();
+
+        $students = $classroom->students->map(function ($student) {
+            return [
+                'id' => $student->id,
+                'fullname' => $student->fullname,
+                'email' => $student->email,
+                'created_at' => $student->created_at,
+                'pivot' => [
+                    'created_at' => $student->pivot?->created_at,
+                    'updated_at' => $student->pivot?->updated_at,
+                    'status' => $student->pivot?->status,
+                ],
+            ];
+        })->values();
+
+        return response()->json([
+            'id' => $classroom->id,
+            'name' => $classroom->name,
+            'join_code' => $classroom->join_code,
+            'room' => $classroom->room,
+            'schedule' => $classroom->schedule,
+            'is_active' => $classroom->is_active,
+            'students' => $students,
+            'assignments' => $assignments,
+        ]);
     }
 
     public function destroy(Classroom $classroom)
