@@ -50,6 +50,14 @@ class SubmissionController extends Controller
         }));
     }
 
+    private function normalizeComparable(?string $value): string
+    {
+        $text = mb_strtolower(trim((string) $value));
+        $text = preg_replace('/[^\p{L}\p{N}\s]/u', ' ', $text) ?? '';
+        $text = preg_replace('/\s+/', ' ', $text) ?? '';
+        return trim($text);
+    }
+
     private function isLowEffortEssay(?string $value): bool
     {
         $normalized = $this->normalizeText($value);
@@ -116,42 +124,70 @@ class SubmissionController extends Controller
         $normalizedCorrect = $this->normalizeText($correct);
 
         if ($normalizedStudent === '' || $normalizedCorrect === '') {
-            return [0, false, 'No answer or no key answer available.'];
+            return [0, false, 'No answer or no key answer available.', null];
         }
 
         if ($type === 'enumeration') {
             $expectedItems = $this->parseEnumerationItems($correct);
             $studentItems = $this->parseEnumerationItems($student);
+            $normalizedExpectedItems = array_values(array_filter(array_map(
+                fn ($item) => $this->normalizeComparable((string) $item),
+                $expectedItems
+            )));
+            $normalizedStudentItems = array_values(array_filter(array_map(
+                fn ($item) => $this->normalizeComparable((string) $item),
+                $studentItems
+            )));
 
-            if (count($expectedItems) === 0 || count($studentItems) === 0) {
-                return [0, false, 'Enumeration answer missing expected or submitted items.'];
+            if (count($normalizedExpectedItems) === 0 || count($normalizedStudentItems) === 0) {
+                return [
+                    0,
+                    false,
+                    'Enumeration answer missing expected or submitted items.',
+                    [
+                        'raw_score' => 0.0,
+                        'total_score' => 0,
+                        'correct_count' => 0,
+                        'total_possible_answers' => count($normalizedExpectedItems),
+                    ],
+                ];
             }
 
             $matched = 0;
-            $usedStudentIndexes = [];
-            foreach ($expectedItems as $expected) {
-                foreach ($studentItems as $index => $submitted) {
-                    if (in_array($index, $usedStudentIndexes, true)) continue;
-                    if ($this->answersAreSimilar($submitted, $expected)) {
+            $usedExpectedIndexes = [];
+            foreach ($normalizedStudentItems as $submitted) {
+                foreach ($normalizedExpectedItems as $index => $expected) {
+                    if (in_array($index, $usedExpectedIndexes, true)) continue;
+                    if ($submitted === $expected) {
                         $matched++;
-                        $usedStudentIndexes[] = $index;
+                        $usedExpectedIndexes[] = $index;
                         break;
                     }
                 }
             }
 
-            $ratio = $matched / max(1, count($expectedItems));
-            $earned = (int) round($questionPoints * $ratio);
+            $totalPossibleAnswers = count($normalizedExpectedItems);
+            $pointsPerAnswer = $questionPoints / max(1, $totalPossibleAnswers);
+            $rawScore = $matched * $pointsPerAnswer;
+            $earned = (int) round($rawScore);
+            $earned = max(0, min($questionPoints, $earned));
+
             return [
-                max(0, min($questionPoints, $earned)),
-                $matched === count($expectedItems),
-                "Matched {$matched} of " . count($expectedItems) . ' expected items.',
+                $earned,
+                $matched === $totalPossibleAnswers,
+                "Matched {$matched} of {$totalPossibleAnswers} expected items.",
+                [
+                    'raw_score' => round($rawScore, 2),
+                    'total_score' => $earned,
+                    'correct_count' => $matched,
+                    'total_possible_answers' => $totalPossibleAnswers,
+                ],
             ];
         }
 
         if ($type === 'essay') {
             if ($this->isLowEffortEssay($student)) {
-                return [0, false, 'Essay response appears low-effort or uncertain.'];
+                return [0, false, 'Essay response appears low-effort or uncertain.', null];
             }
 
             $ratio = $this->computeEssayRatio($student, $correct);
@@ -160,14 +196,15 @@ class SubmissionController extends Controller
                 max(0, min($questionPoints, $earned)),
                 $ratio >= 0.95,
                 'Essay semantic similarity score: ' . number_format($ratio * 100, 1) . '%.',
+                null,
             ];
         }
 
         if ($normalizedStudent === $normalizedCorrect) {
-            return [$questionPoints, true, 'Exact match.'];
+            return [$questionPoints, true, 'Exact match.', null];
         }
 
-        return [0, false, 'Answer did not match expected response.'];
+        return [0, false, 'Answer did not match expected response.', null];
     }
 
     public function store(Request $request, Assignment $assignment)
@@ -203,7 +240,7 @@ class SubmissionController extends Controller
             $totalPoints += $questionPoints;
             // Student answer might be an index if it's multiple choice, but usually it's the text from current UI
             $studentAnswer = $validated['answers'][$question->id] ?? null;
-            [$earnedForQuestion, $isCorrect, $gradingNote] = $this->scoreQuestion(
+            [$earnedForQuestion, $isCorrect, $gradingNote, $gradingBreakdown] = $this->scoreQuestion(
                 $this->normalizeType($question->type),
                 is_scalar($studentAnswer) ? (string) $studentAnswer : null,
                 $question->correct_answer,
@@ -218,6 +255,7 @@ class SubmissionController extends Controller
                 'points' => $questionPoints,
                 'earned_points' => $earnedForQuestion,
                 'grading_note' => $gradingNote,
+                'grading_breakdown' => is_array($gradingBreakdown) ? $gradingBreakdown : null,
             ];
         }
 
