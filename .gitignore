@@ -24,3 +24,5 @@ Homestead.yaml
 Thumbs.db
 /.appdata
 /storage/PsySH
+.env.docker
+.env.docker.*

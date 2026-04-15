@@ -25,7 +25,7 @@ docker compose exec teachify-api php artisan key:generate
 docker compose exec teachify-api php artisan migrate --force
 ```
 
-API should be available at `http://localhost:18000`.
+API should be available at `http://localhost:8000`.
 
 Stop services:
 ```bash
