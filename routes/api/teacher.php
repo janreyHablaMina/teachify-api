@@ -17,6 +17,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/generation-usage/consume', [GenerationUsageController::class, 'consume']);
 
     Route::get('/quizzes', [QuizController::class, 'index']);
+    Route::post('/quizzes', [QuizController::class, 'store']);
     Route::get('/quizzes/{quiz}', [QuizController::class, 'show']);
     Route::delete('/quizzes/{quiz}', [QuizController::class, 'destroy']);
     Route::post('/quizzes/{quiz}/duplicate', [QuizController::class, 'duplicate']);

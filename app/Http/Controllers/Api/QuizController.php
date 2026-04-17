@@ -26,6 +26,44 @@ class QuizController extends Controller
         );
     }
 
+    public function store(Request $request)
+    {
+        $user = $request->user();
+        
+        $request->validate([
+            'title' => 'required|string|max:255',
+            'topic' => 'nullable|string|max:255',
+            'type' => 'nullable|string|max:255',
+            'questions' => 'required|array|min:1',
+            'questions.*.type' => 'required|string',
+            'questions.*.question' => 'required|string',
+            'questions.*.answer' => 'required|string',
+            'questions.*.options' => 'nullable|array',
+            'questions.*.explanation' => 'nullable|string',
+            'questions.*.points' => 'nullable|integer',
+        ]);
+
+        $quiz = Quiz::create([
+            'user_id' => $user->id,
+            'title' => $request->title,
+            'topic' => $request->topic,
+            'type' => $request->type ?? 'generated',
+        ]);
+
+        foreach ($request->questions as $questionData) {
+            $quiz->questions()->create([
+                'type' => $questionData['type'],
+                'question_text' => $questionData['question'],
+                'options' => $questionData['options'] ?? [],
+                'correct_answer' => $questionData['answer'],
+                'explanation' => $questionData['explanation'] ?? null,
+                'points' => $questionData['points'] ?? 1,
+            ]);
+        }
+
+        return response()->json($quiz->load('questions'), 201);
+    }
+
     public function show(Quiz $quiz)
     {
         if (auth()->id() !== $quiz->user_id) {
