@@ -9,6 +9,7 @@ services:
     env_file:
       - .env.docker
     volumes:
+      - .:/var/www/html
       - ./.env.docker:/var/www/html/.env
     depends_on:
       postgres:

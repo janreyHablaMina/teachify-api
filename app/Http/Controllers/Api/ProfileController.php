@@ -19,13 +19,36 @@ class ProfileController extends Controller
         $validated = $request->validate([
             'fullname' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email,' . $user->id],
+            // Identity
+            'display_name' => ['nullable', 'string', 'max:255'],
+            'bio' => ['nullable', 'string', 'max:1000'],
+            'school' => ['nullable', 'string', 'max:255'],
+            'subjects' => ['nullable', 'array'],
+            'teaching_level' => ['nullable', 'string', 'max:255'],
+            // AI Preferences
+            'ai_default_difficulty' => ['nullable', 'string', 'in:easy,medium,hard'],
+            'ai_default_question_type' => ['nullable', 'string'],
+            'ai_language' => ['nullable', 'string', 'max:100'],
+            'ai_tone' => ['nullable', 'string', 'max:100'],
+            'ai_generate_explanations' => ['nullable', 'boolean'],
+            'ai_include_rationale' => ['nullable', 'boolean'],
+            // Notifications
+            'notify_email' => ['nullable', 'boolean'],
+            'notify_quiz_completed' => ['nullable', 'boolean'],
+            'notify_student_submission' => ['nullable', 'boolean'],
+            'notify_weekly_summary' => ['nullable', 'boolean'],
+            // UI
+            'ui_theme' => ['nullable', 'string', 'in:light,dark'],
+            'ui_accent_color' => ['nullable', 'string', 'max:20'],
+            'ui_density' => ['nullable', 'string', 'in:comfortable,compact'],
+            'two_factor_enabled' => ['nullable', 'boolean'],
         ]);
 
         $user->update($validated);
 
         return response()->json([
             'message' => 'Profile updated successfully.',
-            'user' => $user,
+            'user' => $user->fresh(),
         ]);
     }
 
@@ -45,6 +68,29 @@ class ProfileController extends Controller
 
         return response()->json([
             'message' => 'Password updated successfully.',
+        ]);
+    /**
+     * Update the user's avatar.
+     */
+    public function updateAvatar(Request $request)
+    {
+        $request->validate([
+            'photo' => ['required', 'image', 'max:2048'], // 2MB max
+        ]);
+
+        $user = $request->user();
+
+        if ($request->hasFile('photo')) {
+            $path = $request->file('photo')->store('profile-photos', 'public');
+            
+            $user->update([
+                'profile_photo_path' => $path,
+            ]);
+        }
+
+        return response()->json([
+            'message' => 'Avatar updated successfully.',
+            'profile_photo_url' => $user->profile_photo_path ? asset('storage/' . $user->profile_photo_path) : null,
         ]);
     }
 }

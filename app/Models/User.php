@@ -27,6 +27,30 @@ class User extends Authenticatable
         'quiz_generation_limit',
         'quizzes_used',
         'max_questions_per_quiz',
+        // Advanced Profile
+        'display_name',
+        'bio',
+        'school',
+        'subjects',
+        'teaching_level',
+        'profile_photo_path',
+        // AI Preferences
+        'ai_default_difficulty',
+        'ai_default_question_type',
+        'ai_language',
+        'ai_tone',
+        'ai_generate_explanations',
+        'ai_include_rationale',
+        // Notifications
+        'notify_email',
+        'notify_quiz_completed',
+        'notify_student_submission',
+        'notify_weekly_summary',
+        // UI
+        'ui_theme',
+        'ui_accent_color',
+        'ui_density',
+        'two_factor_enabled',
     ];
 
     /**
@@ -52,6 +76,14 @@ class User extends Authenticatable
             'quiz_generation_limit' => 'integer',
             'quizzes_used' => 'integer',
             'max_questions_per_quiz' => 'integer',
+            'subjects' => 'array',
+            'ai_generate_explanations' => 'boolean',
+            'ai_include_rationale' => 'boolean',
+            'notify_email' => 'boolean',
+            'notify_quiz_completed' => 'boolean',
+            'notify_student_submission' => 'boolean',
+            'notify_weekly_summary' => 'boolean',
+            'two_factor_enabled' => 'boolean',
         ];
     }
 
