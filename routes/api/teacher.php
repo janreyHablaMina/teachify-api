@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AssignmentController;
 use App\Http\Controllers\Api\ClassroomController;
 use App\Http\Controllers\Api\GenerationUsageController;
+use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\QuizController;
 use App\Http\Controllers\Api\SubmissionController;
 use App\Http\Controllers\Api\SummaryController;
@@ -15,6 +16,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/summaries/generate', [SummaryController::class, 'generate']);
     Route::get('/summaries/{summary}/export-pdf', [SummaryController::class, 'exportPdf']);
     Route::post('/generation-usage/consume', [GenerationUsageController::class, 'consume']);
+
+    Route::put('/profile', [ProfileController::class, 'update']);
+    Route::put('/profile/password', [ProfileController::class, 'updatePassword']);
 
     Route::get('/quizzes', [QuizController::class, 'index']);
     Route::post('/quizzes', [QuizController::class, 'store']);
