@@ -69,7 +69,11 @@ class AiService
 
     public function generateRawResponse(string $prompt)
     {
-        if (!$this->apiKey) {
+        if (! $this->hasConfiguredApiKey()) {
+            if (app()->isLocal()) {
+                return $this->getMockQuizResponse($prompt);
+            }
+
             throw new \Exception('AI API key is missing. Set AI_API_KEY in the backend .env.');
         }
 
@@ -138,6 +142,11 @@ class AiService
 
             $errorData = $response->json();
             $msg = $errorData['error']['message'] ?? $response->body();
+
+            if (app()->isLocal() && str_contains(strtolower((string) $msg), 'api key not valid')) {
+                return $this->getMockQuizResponse($prompt);
+            }
+
             throw new \Exception("Gemini API error: {$msg}");
         }
 
@@ -155,6 +164,13 @@ class AiService
         }
 
         return $text;
+    }
+
+    protected function hasConfiguredApiKey(): bool
+    {
+        $key = trim((string) $this->apiKey);
+
+        return $key !== '' && $key !== 'your_api_key_here';
     }
 
     protected function getMockQuizResponse(string $prompt = '')

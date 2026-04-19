@@ -176,6 +176,7 @@ class QuizController extends Controller
             );
 
             $this->updateUserUsage($user);
+            $this->syncUsageNotifications($user);
             $this->notificationService->create($user, [
                 'source_key' => 'free:ai:quiz-generated:' . $quiz->id,
                 'title' => 'Quiz generated successfully',
@@ -225,6 +226,55 @@ class QuizController extends Controller
             : $user->quizzes()->count();
         
         $user->save();
+    }
+
+    private function resolveGenerationLimit($user): int
+    {
+        $plan = strtolower((string) ($user->plan ?? 'free'));
+
+        return match ($plan) {
+            'basic' => 50,
+            'pro' => 200,
+            'school' => 1000,
+            default => max(0, (int) ($user->quiz_generation_limit ?? 3)),
+        };
+    }
+
+    private function syncUsageNotifications($user): void
+    {
+        $limit = $this->resolveGenerationLimit($user);
+        $used = max(0, (int) ($user->quizzes_used ?? 0));
+        $remaining = max(0, $limit - $used);
+
+        if ($remaining === 1) {
+            $this->notificationService->upsertBySource($user, 'free:usage:one-left', [
+                'title' => 'You have 1 quiz generation left',
+                'message' => 'Use it wisely, or upgrade to avoid interruptions.',
+                'category' => 'plan',
+                'event_type' => 'plan_updates',
+                'severity' => 'warning',
+            ]);
+        }
+
+        if ($remaining === 0) {
+            $this->notificationService->upsertBySource($user, 'free:usage:limit-reached', [
+                'title' => "You've reached your limit",
+                'message' => 'Upgrade to continue generating more quizzes.',
+                'category' => 'plan',
+                'event_type' => 'limits_reached',
+                'severity' => 'critical',
+            ]);
+        }
+
+        if ($remaining <= 1) {
+            $this->notificationService->upsertBySource($user, 'free:usage:upsell', [
+                'title' => 'Upgrade to unlock unlimited quizzes',
+                'message' => 'Upgrade to access more features and higher generation limits.',
+                'category' => 'plan',
+                'event_type' => 'suggestions',
+                'severity' => 'info',
+            ]);
+        }
     }
 
     public function exportPdf(Request $request, Quiz $quiz)
