@@ -4,11 +4,16 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\TeacherNotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class GenerationUsageController extends Controller
 {
+    public function __construct(private readonly TeacherNotificationService $notificationService)
+    {
+    }
+
     private function resolveGenerationLimit(?User $user): int
     {
         if (! $user) {
@@ -46,6 +51,22 @@ class GenerationUsageController extends Controller
         $used = max(0, (int) ($user->quizzes_used ?? 0));
 
         if ($limit > 0 && $used >= $limit) {
+            $this->notificationService->upsertBySource($user, 'free:usage:limit-reached', [
+                'title' => "You've reached your limit",
+                'message' => 'Upgrade to continue generating more quizzes.',
+                'category' => 'plan',
+                'event_type' => 'limits_reached',
+                'severity' => 'critical',
+            ]);
+
+            $this->notificationService->upsertBySource($user, 'free:usage:upsell', [
+                'title' => 'Upgrade to unlock unlimited quizzes',
+                'message' => 'Upgrade to access more features and higher generation limits.',
+                'category' => 'plan',
+                'event_type' => 'suggestions',
+                'severity' => 'info',
+            ]);
+
             return response()->json([
                 'message' => "You have reached your plan limit ({$limit} generations). Upgrade to continue.",
                 'quiz_generation_limit' => $limit,
@@ -56,6 +77,37 @@ class GenerationUsageController extends Controller
         $nextUsed = $limit > 0 ? min($limit, $used + 1) : $used + 1;
         $user->quizzes_used = $nextUsed;
         $user->save();
+        $remaining = max(0, $limit - $nextUsed);
+
+        if ($remaining === 1) {
+            $this->notificationService->upsertBySource($user, 'free:usage:one-left', [
+                'title' => 'You have 1 quiz generation left',
+                'message' => 'Use it wisely, or upgrade to avoid interruptions.',
+                'category' => 'plan',
+                'event_type' => 'plan_updates',
+                'severity' => 'warning',
+            ]);
+        }
+
+        if ($remaining === 0) {
+            $this->notificationService->upsertBySource($user, 'free:usage:limit-reached', [
+                'title' => "You've reached your limit",
+                'message' => 'Upgrade to continue generating more quizzes.',
+                'category' => 'plan',
+                'event_type' => 'limits_reached',
+                'severity' => 'critical',
+            ]);
+        }
+
+        if ($remaining <= 1) {
+            $this->notificationService->upsertBySource($user, 'free:usage:upsell', [
+                'title' => 'Upgrade to unlock unlimited quizzes',
+                'message' => 'Upgrade to access more features and higher generation limits.',
+                'category' => 'plan',
+                'event_type' => 'suggestions',
+                'severity' => 'info',
+            ]);
+        }
 
         return response()->json([
             'message' => 'Generation usage updated.',

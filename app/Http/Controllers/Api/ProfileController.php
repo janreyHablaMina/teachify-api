@@ -3,12 +3,17 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Services\TeacherNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
 
 class ProfileController extends Controller
 {
+    public function __construct(private readonly TeacherNotificationService $notificationService)
+    {
+    }
+
     /**
      * Update the user's profile information.
      */
@@ -46,6 +51,14 @@ class ProfileController extends Controller
 
         $user->update($validated);
 
+        $this->notificationService->upsertBySource($user, 'free:system:profile-updated', [
+            'title' => 'Profile updated successfully',
+            'message' => 'Your profile details were saved.',
+            'category' => 'system',
+            'event_type' => 'system_notice',
+            'severity' => 'success',
+        ]);
+
         return response()->json([
             'message' => 'Profile updated successfully.',
             'user' => $user->fresh(),
@@ -62,8 +75,17 @@ class ProfileController extends Controller
             'password' => ['required', 'confirmed', Password::defaults()],
         ]);
 
-        $request->user()->update([
+        $user = $request->user();
+        $user->update([
             'password' => Hash::make($request->password),
+        ]);
+
+        $this->notificationService->upsertBySource($user, 'free:system:password-changed', [
+            'title' => 'Password changed',
+            'message' => 'Your account password was updated successfully.',
+            'category' => 'system',
+            'event_type' => 'system_notice',
+            'severity' => 'success',
         ]);
 
         return response()->json([

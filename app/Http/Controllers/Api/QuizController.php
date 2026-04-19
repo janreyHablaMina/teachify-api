@@ -3,8 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Services\QuizService;
 use App\Services\PdfService;
+use App\Services\QuizService;
+use App\Services\TeacherNotificationService;
 use Illuminate\Http\Request;
 use App\Models\Quiz;
 
@@ -12,11 +13,13 @@ class QuizController extends Controller
 {
     protected $quizService;
     protected $pdfService;
+    protected $notificationService;
 
-    public function __construct(QuizService $quizService, PdfService $pdfService)
+    public function __construct(QuizService $quizService, PdfService $pdfService, TeacherNotificationService $notificationService)
     {
         $this->quizService = $quizService;
         $this->pdfService = $pdfService;
+        $this->notificationService = $notificationService;
     }
 
     public function index(Request $request)
@@ -60,6 +63,16 @@ class QuizController extends Controller
                 'points' => $questionData['points'] ?? 1,
             ]);
         }
+
+        $this->notificationService->create($user, [
+            'source_key' => 'free:ai:quiz-generated:' . $quiz->id,
+            'title' => 'Quiz generated successfully',
+            'message' => 'Your quiz "' . $quiz->title . '" is ready to review.',
+            'category' => 'ai_activity',
+            'event_type' => 'quiz_generated',
+            'severity' => 'success',
+        ]);
+        $this->notificationService->deleteBySource($user, TeacherNotificationService::FREE_FIRST_QUIZ_REMINDER_SOURCE);
 
         return response()->json($quiz->load('questions'), 201);
     }
@@ -163,12 +176,29 @@ class QuizController extends Controller
             );
 
             $this->updateUserUsage($user);
+            $this->notificationService->create($user, [
+                'source_key' => 'free:ai:quiz-generated:' . $quiz->id,
+                'title' => 'Quiz generated successfully',
+                'message' => 'Your uploaded file was processed and quiz "' . $quiz->title . '" is ready.',
+                'category' => 'ai_activity',
+                'event_type' => 'quiz_generated',
+                'severity' => 'success',
+            ]);
+            $this->notificationService->deleteBySource($user, TeacherNotificationService::FREE_FIRST_QUIZ_REMINDER_SOURCE);
 
             return response()->json([
                 'message' => 'Quiz generated successfully',
                 'quiz' => $quiz,
             ]);
         } catch (\Exception $e) {
+            $this->notificationService->create($user, [
+                'title' => 'Quiz generation failed',
+                'message' => 'We could not generate your quiz. Please try again.',
+                'category' => 'ai_activity',
+                'event_type' => 'generation_failed',
+                'severity' => 'critical',
+            ]);
+
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }

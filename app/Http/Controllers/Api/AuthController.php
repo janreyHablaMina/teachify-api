@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\TeacherNotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -13,6 +14,10 @@ use Throwable;
 
 class AuthController extends Controller
 {
+    public function __construct(private readonly TeacherNotificationService $notificationService)
+    {
+    }
+
     private array $blockedTempEmailDomains = [
         'mailinator.com',
         'tempmail.com',
@@ -97,6 +102,14 @@ class AuthController extends Controller
                     'token' => $user->createToken('web-register')->plainTextToken,
                 ];
             });
+
+            $this->notificationService->upsertBySource($payload['user'], 'free:system:welcome', [
+                'title' => 'Welcome to Teachify',
+                'message' => 'Your free plan is ready. Start by creating your first quiz.',
+                'category' => 'system',
+                'event_type' => 'system_notice',
+                'severity' => 'success',
+            ]);
 
             return response()->json([
                 'message' => 'Registration successful.',
