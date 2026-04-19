@@ -108,4 +108,9 @@ class User extends Authenticatable
             ->withPivot('status')
             ->withTimestamps();
     }
+
+    public function teacherNotifications()
+    {
+        return $this->hasMany(TeacherNotification::class);
+    }
 }

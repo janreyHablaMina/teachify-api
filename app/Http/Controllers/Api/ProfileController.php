@@ -69,6 +69,8 @@ class ProfileController extends Controller
         return response()->json([
             'message' => 'Password updated successfully.',
         ]);
+    }
+
     /**
      * Update the user's avatar.
      */
