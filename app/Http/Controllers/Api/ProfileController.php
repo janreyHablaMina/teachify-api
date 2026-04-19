@@ -114,6 +114,7 @@ class ProfileController extends Controller
 
         return response()->json([
             'message' => 'Avatar updated successfully.',
+            'profile_photo_path' => $user->profile_photo_path,
             'profile_photo_url' => $user->profile_photo_path ? asset('storage/' . $user->profile_photo_path) : null,
         ]);
     }
